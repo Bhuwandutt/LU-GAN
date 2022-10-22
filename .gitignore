@@ -127,3 +127,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+data/imgs/1000_IM-0003-1001.dcm.png
+*.png
+*.xml
+data/reports/ecgen-radiology/.DS_Store
+data/reports/.DS_Store
+data/imgs/.DS_Store
+data/.DS_Store
+.DS_Store
