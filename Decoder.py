@@ -4,15 +4,18 @@ import torch.nn.functional as f
 
 
 def conv3x3(in_planes, out_planes, stride=1):
-    "3x3 convolution with padding"
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1,bias=False)
+    # 3x3 convolution with padding
+    return nn.Conv2d(in_planes,
+                     out_planes,
+                     kernel_size=3,
+                     stride=stride,
+                     padding=1,
+                     bias=False)
 
 
 # Upscale the spatial size by a factor of 2
 def upBlock(in_planes,
-            out_planes,
-            use_batchnorm =True):
+            out_planes):
     block = nn.Sequential(
             nn.Upsample(scale_factor=2, mode='bilinear'),
             conv3x3(in_planes, out_planes),
@@ -80,3 +83,27 @@ class Decoder(nn.Module):
         pre_img = self.to_img(out_code)
 
         return pre_img*0.5 + f.interpolate(image,scale_factor=2,mode="bilinear")*0.5
+
+
+class MultiscaleDecoder(nn.Module):
+    def __init__(self,
+                 decoders):
+        super(MultiscaleDecoder, self).__init__()
+
+        self.num_layer = len(decoders)
+        self.decoders = nn.ModuleList(decoders)
+
+    def forward(self, txt_emded, layer_id):
+
+        global pre_image
+
+        for i in range(layer_id + 1):
+            decoder = self.decoders[i]
+            # resize the final image to different size for the generator
+            if i == 0:
+                # The first generator only generate with text embedding
+                pre_image = decoder(txt_emded)
+            else:
+                pre_image = decoder(pre_image, txt_emded)
+
+        return pre_image
