@@ -57,7 +57,7 @@ class OpenAIDataset(Dataset):
         self.max_len_finding = self.csv_text['findings'].str.len().max()
         self.max_len_impression = self.csv_text['impression'].str.len().max()
         self.num_tokens = 0
-        self.word_dict = 'Users/bhuwandutt/Documents/GitHub/LU-GAN/utils/dict.json'
+        self.word_dict = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/utils/dict.json'
         if os.path.exists(self.word_dict):
             with open(self.word_dict) as f:
                 self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding = json.load(f)
@@ -141,18 +141,20 @@ class OpenAIDataset(Dataset):
 
     def get_word_idx(self):
         print("Counting Vocabulary....")
-        wordbag = []
+        wordbag = set()
         sen_len_finding = []
         sen_len_impression = []
         for idx in tqdm(range(self.__len__())):
 
             fi = self.csv_text.iloc[idx]['findings']
             im = self.csv_text.iloc[idx]['impression']
+            print(fi)
+            print(type(fi))
             sen_len_finding.append(len(fi))
             sen_len_impression.append(len(im))
 
-            wordbag = wordbag + fi + im
-            # wordbag.add(str(im))
+            #wordbag = wordbag + fi + im
+            wordbag.add(str(im))
         # print(type(wordbag))
         print(wordbag)
         vocab = set(wordbag)
