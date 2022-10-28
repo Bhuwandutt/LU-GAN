@@ -7,9 +7,19 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import math
 
-CSV_DIR = '/Users/bhuwandutt/PycharmProjects/BSProject/csv/'
+CSV_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/csv/'
 
 dataframe = pd.read_csv(CSV_DIR + "/" + 'indiana_reports.csv')
+dataframe = dataframe.drop(columns=['MeSH', 'image', 'Problems', 'comparison'], axis=1)
+# print(dataframe.head)
+
+
+def checkNan(dataframe : pd.DataFrame):
+    NaN = dataframe.isnull().sum()
+    i = 0
+    for column in dataframe.columns:
+        print(f"Total Nan Values in {column} columns - {NaN[i]}")
+        i += 1
 
 
 def decontracted(phrase):  # Performs text de-contraction of words like won't to will not
@@ -80,36 +90,36 @@ def preprocess_text(data):
 
 column_list = list(dataframe)
 
-dataframe['MeSH'] = dataframe['MeSH'].fillna('No Mesh')
-dataframe['comparison'] = dataframe['comparison'].fillna('No Comparison')
+
+# dataframe['comparison'] = dataframe['comparison'].fillna('No Comparison')
 dataframe['indication'] = dataframe['indication'].fillna('No Indication')
 dataframe['findings'] = dataframe['findings'].fillna('No Findings')
 dataframe['impression'] = dataframe['impression'].fillna('No Impression')
-dataframe['image'] = dataframe['impression'].fillna('Unknown')
-dataframe['Problems'] = dataframe['impression'].fillna('No Problems')
 
-dataframe['MeSH'] = preprocess_text(dataframe['MeSH'])
-dataframe['comparison'] = preprocess_text(dataframe['comparison'])
+
+# dataframe['MeSH'] = preprocess_text(dataframe['MeSH'])
+# dataframe['comparison'] = preprocess_text(dataframe['comparison'])
 dataframe['indication'] = preprocess_text(dataframe['indication'])
 dataframe['findings'] = preprocess_text(dataframe['findings'])
 dataframe['impression'] = preprocess_text(dataframe['impression'])
-dataframe['image'] = preprocess_text(dataframe['image'])
-dataframe['Problems'] = preprocess_text(dataframe['Problems'])
 
-dataframe.replace("", float("NaN"), inplace=True)
+checkNan(dataframe=dataframe)
+# dataframe['image'] = preprocess_text(dataframe['image'])
+# dataframe['Problems'] = preprocess_text(dataframe['Problems'])
+
+dataframe.replace("", "No Value", inplace=True)
 dataframe['indication_count'] = dataframe['indication'].astype(str).str.split().apply(lambda x: 0 if x == None else len(x))
 dataframe['findings_count'] = dataframe['findings'].astype(str).str.split().apply(lambda x: 0 if x == None else len(x))
 dataframe['impression_count'] = dataframe['impression'].astype(str).str.split().apply(lambda x: 0 if x == None else len(x))
-dataframe.head()
 
-plt.figure(figsize=(12, 5))
-sentences = dataframe['indication'].value_counts()[:50]
-plt.figure(figsize=(20, 5))
-sns.barplot(sentences.index, sentences.values, alpha=0.8)
-plt.ylabel('Number of Occurrences', fontsize=10)
-plt.xticks(fontsize='large', rotation=90)
-plt.title("Indication-Unique sentences")
-# plt.show()
+
+print(dataframe.head())
+
+dataframe['indication'] = dataframe['indication'].fillna('No Indication')
+dataframe['findings'] = dataframe['findings'].fillna('No Findings')
+dataframe['impression'] = dataframe['impression'].fillna('No Impression')
+
+checkNan(dataframe=dataframe)
 
 df = dataframe.sample(frac=1).reset_index(drop=True)
 n_rows = df.shape[0]

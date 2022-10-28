@@ -145,12 +145,16 @@ class OpenAIDataset(Dataset):
         sen_len_finding = []
         sen_len_impression = []
         for idx in tqdm(range(self.__len__())):
-            fi = self.csv_text['findings']
-            im = self.csv_text['impression']
 
+            fi = self.csv_text.iloc[idx]['findings']
+            im = self.csv_text.iloc[idx]['impression']
             sen_len_finding.append(len(fi))
             sen_len_impression.append(len(im))
+
             wordbag = wordbag + fi + im
+            # wordbag.add(str(im))
+        # print(type(wordbag))
+        print(wordbag)
         vocab = set(wordbag)
         word_to_idx = {}
         count = 0
