@@ -7,11 +7,10 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
+import json
 import torch.nn as nn
-import torch.nn.functional as f
 import torchvision
 import torchvision.transforms as transforms
-from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
 from torch.utils.data import DataLoader, random_split
 import random
@@ -19,7 +18,18 @@ import random
 PATH_DATASETS = os.environ.get("PATH_DATASETS", ".")
 BATCH_SIZE = 64
 NUM_WORKERS = 1
-CSV_DIR = '/Users/bhuwandutt/PycharmProjects/BSProject/csv/'
+CSV_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/csv/'
+IMAGE_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/data/imgs/'
+
+
+def read_png(filename):
+    print(filename)
+    image = None
+    if os.path.exists(filename):
+        imag = cv2.imread(filename, cv2.COLOR_BGR2GRAY)
+        image = cv2.cvtColor(imag)
+
+    return image
 
 
 class OpenAIDataset(Dataset):
@@ -32,8 +42,8 @@ class OpenAIDataset(Dataset):
         super().__init__()
         self.filename = file_name
         self.txt_len = []
-        self.csv_text = pd.read_csv(CSV_DIR + "/" + file_name+'.csv')
-        self.csv_images = pd.read_csv(CSV_DIR + "/" + 'indiana_projections.csv')
+        self.csv_text = pd.read_csv(CSV_DIR + file_name+'.csv')
+        self.csv_images = pd.read_csv(CSV_DIR + 'indiana_projections.csv')
         self.transform = transform
         self.data_dir = PATH_DATASETS
         self.batch_size = batch_size
@@ -47,6 +57,15 @@ class OpenAIDataset(Dataset):
         self.max_len_finding = self.csv_text['findings'].str.len().max()
         self.max_len_impression = self.csv_text['impression'].str.len().max()
         self.num_tokens = 0
+        self.word_dict = 'Users/bhuwandutt/Documents/GitHub/LU-GAN/utils/dict.json'
+        if os.path.exists(self.word_dict):
+            with open(self.word_dict) as f:
+                self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding = json.load(f)
+        else:
+            self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding = self.get_word_idx()
+            with open(self.word_dict, 'w') as f:
+                json.dump([self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding], f)
+
         for index, row in tqdm(self.csv_text.iterrows()):
             subject_id = row['uid']
             self.subject_ids.append(subject_id)
@@ -65,7 +84,7 @@ class OpenAIDataset(Dataset):
                 text_len = len(finding)
                 self.num_tokens = self.num_tokens + len(finding.split())
             else:
-                text_len = 11
+                text_len = 0
             # print(text_len)
             txt_finding = np.pad(np.array(finding),
                                  (int(self.max_len_finding - text_len), 0),
@@ -77,7 +96,7 @@ class OpenAIDataset(Dataset):
                 text_len = len(impression)
                 self.num_tokens = self.num_tokens + len(impression.split())
             else:
-                text_len = 13
+                text_len = 0
             txt_impression = np.pad(np.array(impression),
                                     (int(self.max_len_impression - text_len), 0),
                                     'constant',
@@ -100,13 +119,14 @@ class OpenAIDataset(Dataset):
         img_name_F = self.image_F[idx]
         img_name_L = self.image_L[idx]
 
-        chest_img_F = np.array(cv2.cvtColor(cv2.imread(str(img_name_F)), cv2.COLOR_BGR2GRAY))
-        chest_img_L = np.array(cv2.cvtColor(cv2.imread(str(img_name_L)), cv2.COLOR_BGR2GRAY))
+        chest_img_F = np.array(read_png(IMAGE_DIR+str(img_name_F)))
+        chest_img_L = np.array(read_png(IMAGE_DIR+str(img_name_L)))
 
         if self.transform:
             chest_img_F = self.transform(chest_img_F)
             chest_img_L = self.transform(chest_img_L)
 
+        print(self.findings[idx])
         sample = {
                 'subject_id': torch.tensor(self.subject_ids[idx], dtype=torch.long),
                 'finding': torch.tensor(self.findings[idx], dtype=torch.long),
@@ -118,6 +138,35 @@ class OpenAIDataset(Dataset):
 
     def __len__(self):
         return len(self.csv_text)
+
+    def get_word_idx(self):
+        print("Counting Vocabulary....")
+        wordbag = []
+        sen_len_finding = []
+        sen_len_impression = []
+        for idx in tqdm(range(self.__len__())):
+            fi = self.csv_text['findings']
+            im = self.csv_text['impression']
+
+            sen_len_finding.append(len(fi))
+            sen_len_impression.append(len(im))
+            wordbag = wordbag + fi + im
+        vocab = set(wordbag)
+        word_to_idx = {}
+        count = 0
+        for i, word in enumerate(vocab):
+            if word in word_to_idx.keys():
+                pass
+            else:
+                word_to_idx[word] = count
+                count += 1
+        vocab_len = count + 1
+        max_len_im, max_len_fi = max(sen_len_impression), max(sen_len_finding)
+        print("Totally {} medical report".format(self.__len__()))
+        print("Totally {} vocabulary".format(vocab_len))
+        print("Max Finding length {}".format(max_len_fi))
+        print("Max Impression length {}".format(max_len_im))
+        return word_to_idx, vocab_len, max_len_im, max_len_fi
 
 
 class OpeniDataset_Siamese(Dataset):
@@ -163,9 +212,9 @@ class OpeniDataset_Siamese(Dataset):
     def get_one_data(self, idx):
 
         # chest_img_L = np.array(read_png(self.image_L[idx]))
-        chest_img_L = np.array(cv2.cvtColor(cv2.imread(str(self.image_L[idx])), cv2.COLOR_BGR2GRAY))
+        chest_img_L = np.array(read_png(IMAGE_DIR+str(self.image_L[idx])))
         # chest_img_F = np.array(read_png(self.image_F[idx]))
-        chest_img_F = np.array(cv2.cvtColor(cv2.imread(str(self.image_F[idx])), cv2.COLOR_BGR2GRAY))
+        chest_img_F = np.array(read_png(IMAGE_DIR+str(self.image_F[idx])))
         if self.transform:
             chest_img_F = self.transform(chest_img_F)
             chest_img_L = self.transform(chest_img_L)

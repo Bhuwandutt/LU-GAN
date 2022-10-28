@@ -184,10 +184,10 @@ class Trainer:
 
     def define_opt(self, layer_id):
 
-        # Define optimizer
-        print(next(self.encoder.parameters()))
-        print(next(self.decoder_L.parameters()))
-        print(next(self.decoder_F.parameters()))
+        # # Define optimizer
+        # print(next(self.encoder.parameters()))
+        # print(next(self.decoder_L.parameters()))
+        # print(next(self.decoder_F.parameters()))
 
         self.G_optimizer = torch.optim.Adam([{'params': self.encoder.parameters()}] +
                                             [{'params': self.decoder_F.parameters()}],
