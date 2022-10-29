@@ -41,7 +41,7 @@ class OpenAIDataset(Dataset):
 
         super().__init__()
         self.filename = file_name
-        self.txt_len = []
+        self.txt_len  = []
         self.csv_text = pd.read_csv(CSV_DIR + file_name+'.csv')
         self.csv_images = pd.read_csv(CSV_DIR + 'indiana_projections.csv')
         self.transform = transform
@@ -54,8 +54,6 @@ class OpenAIDataset(Dataset):
         self.image_L = []
         self.image_F = []
         self.subject_ids = []
-        self.max_len_finding = self.csv_text['findings'].str.len().max()
-        self.max_len_impression = self.csv_text['impression'].str.len().max()
         self.num_tokens = 0
         self.word_dict = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/utils/dict.json'
         if os.path.exists(self.word_dict):
@@ -65,40 +63,44 @@ class OpenAIDataset(Dataset):
             self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding = self.get_word_idx()
             with open(self.word_dict, 'w') as f:
                 json.dump([self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding], f)
-
         for index, row in tqdm(self.csv_text.iterrows()):
             subject_id = row['uid']
             self.subject_ids.append(subject_id)
-
-            finding = row['findings']
-            impression = row['impression']
+            fi = row['findings']
+            im = row['impression']
+            # print(self.word_to_idx)
+            finding = [self.word_to_idx[w] + 1 for w in fi]
+            impression = [self.word_to_idx[w] + 1 for w in im]
 
             # self.impression.append(impression)
             image_s = self.csv_images.loc[(self.csv_images['uid'] == subject_id)]
             self.image_L.append(image_s.loc[image_s['projection'] == 'Lateral'])
             self.image_F.append(image_s.loc[image_s['projection'] == 'Frontal'])
 
+            txt_finding = np.array(finding)
+            txt_impression = np.array(impression)
             # Process to pad the findings and impression to make them of similar length
             # Change Findings and Impression to numpy
-            if pd.notnull(finding):
-                text_len = len(finding)
-                self.num_tokens = self.num_tokens + len(finding.split())
-            else:
-                text_len = 0
+            # if pd.notnull(finding):
+            #     text_len = len(finding)
+            #     self.num_tokens = self.num_tokens + len(finding.split())
+            # else:
+            text_len = len(txt_finding)
             # print(text_len)
-            txt_finding = np.pad(np.array(finding),
-                                 (int(self.max_len_finding - text_len), 0),
+            txt_finding = np.pad(txt_finding,
+                                 (self.max_len_finding - text_len), 0,
                                  'constant',
                                  constant_values=0)
             self.findings.append(txt_finding)
 
-            if pd.notnull(impression):
-                text_len = len(impression)
-                self.num_tokens = self.num_tokens + len(impression.split())
-            else:
-                text_len = 0
-            txt_impression = np.pad(np.array(impression),
-                                    (int(self.max_len_impression - text_len), 0),
+            # if pd.notnull(impression):
+            #     text_len = len(impression)
+            #     self.num_tokens = self.num_tokens + len(impression.split())
+            # else:
+            #     text_len = 0
+            text_len = len(txt_impression)
+            txt_impression = np.pad(txt_impression,
+                                    (self.max_len_impression - text_len), 0,
                                     'constant',
                                     constant_values=0)
             self.impression.append(txt_impression)
@@ -141,26 +143,23 @@ class OpenAIDataset(Dataset):
 
     def get_word_idx(self):
         print("Counting Vocabulary....")
-        wordbag = set()
+        wordbag = []
         sen_len_finding = []
         sen_len_impression = []
         for idx in tqdm(range(self.__len__())):
 
-            fi = self.csv_text.iloc[idx]['findings']
-            im = self.csv_text.iloc[idx]['impression']
-            print(fi)
-            print(type(fi))
+            fi = str(self.csv_text['findings']).split()
+            im = str(self.csv_text['impression']).split()
+            # print(fi)
+            # print((fi))
             sen_len_finding.append(len(fi))
             sen_len_impression.append(len(im))
-
-            #wordbag = wordbag + fi + im
-            wordbag.add(str(im))
-        # print(type(wordbag))
-        print(wordbag)
+            wordbag = wordbag + fi + im
         vocab = set(wordbag)
+        print(vocab)
         word_to_idx = {}
         count = 0
-        for i, word in enumerate(vocab):
+        for word in enumerate(vocab):
             if word in word_to_idx.keys():
                 pass
             else:
