@@ -41,8 +41,8 @@ class OpenAIDataset(Dataset):
 
         super().__init__()
         self.filename = file_name
-        self.txt_len  = []
-        self.csv_text = pd.read_csv(CSV_DIR + file_name+'.csv')
+        self.txt_len = []
+        self.csv_text = pd.read_csv(CSV_DIR + file_name + '.csv')
         self.csv_images = pd.read_csv(CSV_DIR + 'indiana_projections.csv')
         self.transform = transform
         self.data_dir = PATH_DATASETS
@@ -58,19 +58,22 @@ class OpenAIDataset(Dataset):
         self.word_dict = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/utils/dict.json'
         if os.path.exists(self.word_dict):
             with open(self.word_dict) as f:
-                self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding = json.load(f)
+                self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding, \
+                    self.max_word_len_impression, self.max_word_len_finding = json.load(f)
         else:
-            self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding = self.get_word_idx()
+            self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding, self.max_word_len_impression, self.max_word_len_finding = self.get_word_by_index()
             with open(self.word_dict, 'w') as f:
-                json.dump([self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding], f)
+                json.dump([self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding,
+                           self.max_word_len_impression, self.max_word_len_finding], f)
+
         for index, row in tqdm(self.csv_text.iterrows()):
             subject_id = row['uid']
             self.subject_ids.append(subject_id)
             fi = row['findings']
             im = row['impression']
             # print(self.word_to_idx)
-            finding = [self.word_to_idx[w] + 1 for w in fi]
-            impression = [self.word_to_idx[w] + 1 for w in im]
+            finding = [self.word_to_index[w] + 1 for w in fi]
+            impression = [self.word_to_index[w] + 1 for w in im]
 
             # self.impression.append(impression)
             image_s = self.csv_images.loc[(self.csv_images['uid'] == subject_id)]
@@ -121,8 +124,8 @@ class OpenAIDataset(Dataset):
         img_name_F = self.image_F[idx]
         img_name_L = self.image_L[idx]
 
-        chest_img_F = np.array(read_png(IMAGE_DIR+str(img_name_F)))
-        chest_img_L = np.array(read_png(IMAGE_DIR+str(img_name_L)))
+        chest_img_F = np.array(read_png(IMAGE_DIR + str(img_name_F)))
+        chest_img_L = np.array(read_png(IMAGE_DIR + str(img_name_L)))
 
         if self.transform:
             chest_img_F = self.transform(chest_img_F)
@@ -130,35 +133,42 @@ class OpenAIDataset(Dataset):
 
         print(self.findings[idx])
         sample = {
-                'subject_id': torch.tensor(self.subject_ids[idx], dtype=torch.long),
-                'finding': torch.tensor(self.findings[idx], dtype=torch.long),
-                'impression': torch.tensor(self.impression[idx], dtype=torch.long),
-                'image_F': torch.tensor(chest_img_F, dtype=torch.float),
-                'image_L': torch.tensor(chest_img_L, dtype=torch.float)
+            'subject_id': torch.tensor(self.subject_ids[idx], dtype=torch.long),
+            'finding': torch.tensor(self.findings[idx], dtype=torch.long),
+            'impression': torch.tensor(self.impression[idx], dtype=torch.long),
+            'image_F': torch.tensor(chest_img_F, dtype=torch.float),
+            'image_L': torch.tensor(chest_img_L, dtype=torch.float)
         }
         return sample
 
     def __len__(self):
         return len(self.csv_text)
 
-    def get_word_idx(self):
+    def get_word_by_index(self):
         print("Counting Vocabulary....")
         wordbag = []
-        sen_len_finding = []
-        sen_len_impression = []
-        for idx in tqdm(range(self.__len__())):
+        len_finding = []
+        len_impression = []
+        word_len_finding = []
+        word_len_impression = []
 
-            fi = str(self.csv_text['findings']).split()
-            im = str(self.csv_text['impression']).split()
+        for index, row in tqdm(self.csv_text.iterrows()):
+
+            fi = row['findings']
+            im = row['impression']
             # print(fi)
-            # print((fi))
-            sen_len_finding.append(len(fi))
-            sen_len_impression.append(len(im))
-            wordbag = wordbag + fi + im
+            len_finding.append(len(fi))
+            len_impression.append(len(im))
+            for word in fi:
+                word_len_finding.append(len(word))
+                wordbag += word
+            for word in im:
+                wordbag += word
+
         vocab = set(wordbag)
-        print(vocab)
+        # print(vocab)
         word_to_idx = {}
-        count = 0
+        count = 1
         for word in enumerate(vocab):
             if word in word_to_idx.keys():
                 pass
@@ -166,29 +176,29 @@ class OpenAIDataset(Dataset):
                 word_to_idx[word] = count
                 count += 1
         vocab_len = count + 1
-        max_len_im, max_len_fi = max(sen_len_impression), max(sen_len_finding)
+        max_len_im, max_len_fi = max(len_impression), max(len_finding)
+        max_word_len_im, max_word_len_fi = max(word_len_impression), max(word_len_finding)
         print("Totally {} medical report".format(self.__len__()))
         print("Totally {} vocabulary".format(vocab_len))
-        print("Max Finding length {}".format(max_len_fi))
-        print("Max Impression length {}".format(max_len_im))
-        return word_to_idx, vocab_len, max_len_im, max_len_fi
+        print("Max Finding: Sentence Length {} \t Word Length {} ".format(max_len_fi, max_word_len_fi))
+        print("Max Impression: Sentence length {} \t Word Length {}".format(max_len_im, max_word_len_im))
+        return word_to_idx, vocab_len, max_len_im, max_len_fi, max_word_len_fi, max_word_len_im
 
 
 class OpeniDataset_Siamese(Dataset):
-    """View consistency dataset for Open-i"""
+    # View consistency dataset for Open-i
 
     def __init__(self,
                  csv_txt,
                  csv_img,
                  root,
                  transform=None):
-        """
-        Args:
-            csv_txt (string): Path to the csv file with Input txt.
-            cvs_img (string): Path to the csv file with Label Images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
-        """
+
+        # Args:
+        #     csv_txt (string): Path to the csv file with Input txt.
+        #     cvs_img (string): Path to the csv file with Label Images.
+        #     transform (callable, optional): Optional transform to be applied
+        #         on a sample.
         self.text_csv = pd.read_csv(csv_txt)
         self.img_csv = pd.read_csv(csv_img)
         self.root = root
@@ -200,26 +210,26 @@ class OpeniDataset_Siamese(Dataset):
             subject_id = self.text_csv.iloc[index]['subject_id']
             # Find the matching image for this report
             subject_imgs = self.img_csv[self.img_csv.subject_id == subject_id]
-
+            # Find matching images for Lateral view
             img_name_L = subject_imgs[subject_imgs.direction == 'L'].iloc[0]['path']
-            # For png data, load data and normalize
             self.image_L.append(img_name_L)
 
-            # Find the matching image for this report
+            # Find the matching image for frontal view
             img_name_F = subject_imgs[subject_imgs.direction == 'F'].iloc[0]['path']
-            # For png data, load data and normalize
-
             self.image_F.append(img_name_F)
 
-    def __len__(self):
+    def __len__(self):  # Function to return length of the dataframe (Number of rows)
         return len(self.text_csv)
 
     def get_one_data(self, idx):
 
         # chest_img_L = np.array(read_png(self.image_L[idx]))
-        chest_img_L = np.array(read_png(IMAGE_DIR+str(self.image_L[idx])))
+
+        # Creating numpy array to read lateral image from path stored in dataframe
+        chest_img_L = np.array(read_png(IMAGE_DIR + str(self.image_L[idx])))
         # chest_img_F = np.array(read_png(self.image_F[idx]))
-        chest_img_F = np.array(read_png(IMAGE_DIR+str(self.image_F[idx])))
+        chest_img_F = np.array(read_png(IMAGE_DIR + str(self.image_F[idx])))
+        # Applying transformation to each image
         if self.transform:
             chest_img_F = self.transform(chest_img_F)
             chest_img_L = self.transform(chest_img_L)
@@ -246,4 +256,3 @@ class OpeniDataset_Siamese(Dataset):
         else:
             sample['label'] = torch.zeros(1).float()
         return sample
-
