@@ -63,12 +63,13 @@ class OpenAIDataset(Dataset):
         else:
             self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding, \
              self.max_word_len_impression, self.max_word_len_finding = self.get_word_by_index()
-            print(self.get_word_by_index())
             with open(self.word_dict, 'w') as f:
                 json.dump([self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding,
                            self.max_word_len_impression, self.max_word_len_finding], f)
 
         for index, row in tqdm(self.csv_text.iterrows()):
+            fi = []
+            im = []
             subject_id = row['uid']
             self.subject_ids.append(subject_id)
             fi = row['findings']
@@ -76,27 +77,36 @@ class OpenAIDataset(Dataset):
             txt_finding = []
             txt_impression = []
 
-            txt_finding_sen = [self.word_to_idx[w] for w in fi]
-            txt_finding_sen = np.pad(txt_finding_sen,
-                                     (self.max_word_len_finding - len(txt_finding_sen), 0),
-                                     'constant', constant_values=0)
-            txt_finding.append(txt_finding_sen)
+            for w in fi.split():
+                txt_finding_sen = self.word_to_idx[w]
+                txt_finding_sen = np.pad(txt_finding_sen,
+                                         (self.max_word_len_finding - len(str(txt_finding_sen)), 0),
+                                         'constant', constant_values=0)
 
-            txt_impression_sen = [self.word_to_idx[w] for w in im]
-            txt_impression_sen = np.pad(txt_impression_sen,
-                                        (self.max_word_len_impression - len(txt_impression_sen), 0),
-                                        'constant', constant_values=0)
-            txt_impression.append(txt_impression_sen)
+                txt_finding.append(txt_finding_sen)
 
-            txt_finding = np.pad(txt_finding,
+            for w in im.split():
+                txt_impression_sen = self.word_to_idx[w]
+                txt_impression_sen = np.pad(txt_impression_sen,
+                                         (self.max_word_len_impression - len(str(txt_impression_sen)), 0),
+                                         'constant', constant_values=0)
+
+                txt_impression.append(txt_impression_sen)
+
+            #     txt_impression_sen = [self.word_to_idx[w] for w in im.split()]
+            #
+            # txt_impression_sen = np.pad(txt_impression_sen,
+            #                             (self.max_len_impression - len(txt_impression_sen), 0),
+            #                             'constant', constant_values=0)
+            # txt_impression.append(txt_impression_sen)
+
+            txt_finding = np.pad(np.array(txt_finding),
                                  (self.max_len_finding - len(txt_finding), 0),
-                                 (0, 0),
                                  'constant',
                                  constant_values=0)
 
-            txt_impression = np.pad(txt_impression,
+            txt_impression = np.pad(np.array(txt_impression),
                                     (self.max_len_impression - len(txt_impression), 0),
-                                    (0, 0),
                                     'constant',
                                     constant_values=0)
 
@@ -161,25 +171,33 @@ class OpenAIDataset(Dataset):
                 wordbag.append(word)
 
         vocab = set(wordbag)
-        print(vocab)
         word_to_idx = {}
         count = 1
         # print(wordbag)
 
-        for word in enumerate(vocab):
+        for word in vocab:
             if word in word_to_idx.keys():
                 pass
             else:
                 word_to_idx[word] = count
                 count += 1
-        vocab_len = count + 1
+
+        # print(word_to_idx)
+        vocab_len = count
         max_len_im, max_len_fi = max(len_impression), max(len_finding)
         max_word_len_im, max_word_len_fi = max(word_len_impression), max(word_len_finding)
+        # print(type(word_to_idx))
+        # print(type(vocab_len))
+        # print(type(max_len_im))
+        # print(type(max_len_fi))
+        # print(type(max_word_len_fi))
+        # print(type(max_word_len_im))
+
         print("Totally {} medical report".format(self.__len__()))
         print("Totally {} vocabulary".format(vocab_len))
         print("Max Finding: Sentence Length {} \t Word Length {} ".format(max_len_fi, max_word_len_fi))
         print("Max Impression: Sentence length {} \t Word Length {}".format(max_len_im, max_word_len_im))
-        return word_to_idx, vocab_len, max_len_im, max_len_fi, max_word_len_fi, max_word_len_im
+        return word_to_idx, vocab_len, max_len_im, max_len_fi, max_word_len_im, max_word_len_fi
 
 
 class OpeniDataset_Siamese(Dataset):
