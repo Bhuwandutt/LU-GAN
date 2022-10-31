@@ -59,9 +59,11 @@ class OpenAIDataset(Dataset):
         if os.path.exists(self.word_dict):
             with open(self.word_dict) as f:
                 self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding, \
-                    self.max_word_len_impression, self.max_word_len_finding = json.load(f)
+                 self.max_word_len_impression, self.max_word_len_finding = json.load(f)
         else:
-            self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding, self.max_word_len_impression, self.max_word_len_finding = self.get_word_by_index()
+            self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding, \
+             self.max_word_len_impression, self.max_word_len_finding = self.get_word_by_index()
+            print(self.get_word_by_index())
             with open(self.word_dict, 'w') as f:
                 json.dump([self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding,
                            self.max_word_len_impression, self.max_word_len_finding], f)
@@ -71,50 +73,40 @@ class OpenAIDataset(Dataset):
             self.subject_ids.append(subject_id)
             fi = row['findings']
             im = row['impression']
-            # print(self.word_to_idx)
-            finding = [self.word_to_index[w] + 1 for w in fi]
-            impression = [self.word_to_index[w] + 1 for w in im]
+            txt_finding = []
+            txt_impression = []
+
+            txt_finding_sen = [self.word_to_idx[w] for w in fi]
+            txt_finding_sen = np.pad(txt_finding_sen,
+                                     (self.max_word_len_finding - len(txt_finding_sen), 0),
+                                     'constant', constant_values=0)
+            txt_finding.append(txt_finding_sen)
+
+            txt_impression_sen = [self.word_to_idx[w] for w in im]
+            txt_impression_sen = np.pad(txt_impression_sen,
+                                        (self.max_word_len_impression - len(txt_impression_sen), 0),
+                                        'constant', constant_values=0)
+            txt_impression.append(txt_impression_sen)
+
+            txt_finding = np.pad(txt_finding,
+                                 (self.max_len_finding - len(txt_finding), 0),
+                                 (0, 0),
+                                 'constant',
+                                 constant_values=0)
+
+            txt_impression = np.pad(txt_impression,
+                                    (self.max_len_impression - len(txt_impression), 0),
+                                    (0, 0),
+                                    'constant',
+                                    constant_values=0)
+
+            self.findings.append(txt_finding)
+            self.impression.append(txt_impression)
 
             # self.impression.append(impression)
             image_s = self.csv_images.loc[(self.csv_images['uid'] == subject_id)]
             self.image_L.append(image_s.loc[image_s['projection'] == 'Lateral'])
             self.image_F.append(image_s.loc[image_s['projection'] == 'Frontal'])
-
-            txt_finding = np.array(finding)
-            txt_impression = np.array(impression)
-            # Process to pad the findings and impression to make them of similar length
-            # Change Findings and Impression to numpy
-            # if pd.notnull(finding):
-            #     text_len = len(finding)
-            #     self.num_tokens = self.num_tokens + len(finding.split())
-            # else:
-            text_len = len(txt_finding)
-            # print(text_len)
-            txt_finding = np.pad(txt_finding,
-                                 (self.max_len_finding - text_len), 0,
-                                 'constant',
-                                 constant_values=0)
-            self.findings.append(txt_finding)
-
-            # if pd.notnull(impression):
-            #     text_len = len(impression)
-            #     self.num_tokens = self.num_tokens + len(impression.split())
-            # else:
-            #     text_len = 0
-            text_len = len(txt_impression)
-            txt_impression = np.pad(txt_impression,
-                                    (self.max_len_impression - text_len), 0,
-                                    'constant',
-                                    constant_values=0)
-            self.impression.append(txt_impression)
-
-            # Find the matching image for this report
-        # self.transform = transforms.Compose(
-        #     [
-        #         transforms.ToTensor(),
-        #         transforms.Normalize((0.307,), (0.3081,)),
-        #     ]
-        # )
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
@@ -154,21 +146,24 @@ class OpenAIDataset(Dataset):
 
         for index, row in tqdm(self.csv_text.iterrows()):
 
-            fi = row['findings']
-            im = row['impression']
-            # print(fi)
+            fi = row['findings'].split()
+            im = row['impression'].split()
+            print(fi)
             len_finding.append(len(fi))
             len_impression.append(len(im))
             for word in fi:
                 word_len_finding.append(len(word))
                 wordbag += word
             for word in im:
+                word_len_impression.append(len(word))
                 wordbag += word
 
         vocab = set(wordbag)
         # print(vocab)
         word_to_idx = {}
         count = 1
+        # print(wordbag)
+
         for word in enumerate(vocab):
             if word in word_to_idx.keys():
                 pass
