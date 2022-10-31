@@ -143,23 +143,25 @@ class OpenAIDataset(Dataset):
         len_impression = []
         word_len_finding = []
         word_len_impression = []
+        fi = []
+        im = []
 
         for index, row in tqdm(self.csv_text.iterrows()):
 
             fi = row['findings'].split()
             im = row['impression'].split()
-            print(fi)
+            # print(fi)
             len_finding.append(len(fi))
             len_impression.append(len(im))
             for word in fi:
                 word_len_finding.append(len(word))
-                wordbag += word
+                wordbag.append(word)
             for word in im:
                 word_len_impression.append(len(word))
-                wordbag += word
+                wordbag.append(word)
 
         vocab = set(wordbag)
-        # print(vocab)
+        print(vocab)
         word_to_idx = {}
         count = 1
         # print(wordbag)
@@ -192,8 +194,7 @@ class OpeniDataset_Siamese(Dataset):
         # Args:
         #     csv_txt (string): Path to the csv file with Input txt.
         #     cvs_img (string): Path to the csv file with Label Images.
-        #     transform (callable, optional): Optional transform to be applied
-        #         on a sample.
+        #     transform (callable, optional): Optional transform to be applied on a sample.
         self.text_csv = pd.read_csv(csv_txt)
         self.img_csv = pd.read_csv(csv_img)
         self.root = root
