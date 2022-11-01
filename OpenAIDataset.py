@@ -28,7 +28,6 @@ def read_png(filename):
     if os.path.exists(filename):
         imag = cv2.imread(filename, cv2.COLOR_BGR2GRAY)
         image = cv2.cvtColor(imag)
-
     return image
 
 
@@ -37,17 +36,17 @@ class OpenAIDataset(Dataset):
     def __init__(self,
                  file_name: str,
                  batch_size: int = BATCH_SIZE,
-                 transform=None):
+                 transform=transforms.ToTensor()):
 
         super().__init__()
         self.filename = file_name
         self.txt_len = []
         self.csv_text = pd.read_csv(CSV_DIR + file_name + '.csv')
         self.csv_images = pd.read_csv(CSV_DIR + 'indiana_projections.csv')
-        self.transform = transform
         self.data_dir = PATH_DATASETS
         self.batch_size = batch_size
         self.num_workers = NUM_WORKERS
+        self.transform = transform
 
         self.findings = []
         self.impression = []
@@ -59,10 +58,10 @@ class OpenAIDataset(Dataset):
         if os.path.exists(self.word_dict):
             with open(self.word_dict) as f:
                 self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding, \
-                 self.max_word_len_impression, self.max_word_len_finding = json.load(f)
+                self.max_word_len_impression, self.max_word_len_finding = json.load(f)
         else:
             self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding, \
-             self.max_word_len_impression, self.max_word_len_finding = self.get_word_by_index()
+                self.max_word_len_impression, self.max_word_len_finding = self.get_word_by_index()
             with open(self.word_dict, 'w') as f:
                 json.dump([self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding,
                            self.max_word_len_impression, self.max_word_len_finding], f)
@@ -72,6 +71,22 @@ class OpenAIDataset(Dataset):
             im = []
             subject_id = row['uid']
             self.subject_ids.append(subject_id)
+
+            #
+            image_L = self.csv_images.loc[
+                (self.csv_images['uid'] == subject_id) & (self.csv_images['projection'] == 'Lateral')].values[0]
+            # print(image_L[1])
+            self.image_L.append(image_L[1])
+            print(subject_id)
+            image_F = self.csv_images.loc[
+                (self.csv_images['uid'] == subject_id) & (self.csv_images['projection'] == 'Frontal')].values[0]
+
+            self.image_F.append(image_F[1])
+
+            # image_s = self.csv_images.loc[(self.csv_images['uid'] == subject_id)]
+            # self.image_L.append(image_s.loc[image_s['projection'] == 'Lateral'])
+            # self.image_F.append(image_s.loc[image_s['projection'] == 'Frontal'])
+            #
             fi = row['findings']
             im = row['impression']
             txt_finding = []
@@ -82,41 +97,28 @@ class OpenAIDataset(Dataset):
                 txt_finding_sen = np.pad(txt_finding_sen,
                                          (self.max_word_len_finding - len(str(txt_finding_sen)), 0),
                                          'constant', constant_values=0)
-
                 txt_finding.append(txt_finding_sen)
 
             for w in im.split():
                 txt_impression_sen = self.word_to_idx[w]
                 txt_impression_sen = np.pad(txt_impression_sen,
-                                         (self.max_word_len_impression - len(str(txt_impression_sen)), 0),
-                                         'constant', constant_values=0)
-
+                                            (self.max_word_len_impression - len(str(txt_impression_sen)), 0),
+                                            'constant', constant_values=0)
                 txt_impression.append(txt_impression_sen)
-
-            #     txt_impression_sen = [self.word_to_idx[w] for w in im.split()]
-            #
-            # txt_impression_sen = np.pad(txt_impression_sen,
-            #                             (self.max_len_impression - len(txt_impression_sen), 0),
-            #                             'constant', constant_values=0)
-            # txt_impression.append(txt_impression_sen)
 
             txt_finding = np.pad(np.array(txt_finding),
                                  (self.max_len_finding - len(txt_finding), 0),
                                  'constant',
                                  constant_values=0)
+            self.findings.append(txt_finding)
 
             txt_impression = np.pad(np.array(txt_impression),
                                     (self.max_len_impression - len(txt_impression), 0),
                                     'constant',
                                     constant_values=0)
-
-            self.findings.append(txt_finding)
             self.impression.append(txt_impression)
 
             # self.impression.append(impression)
-            image_s = self.csv_images.loc[(self.csv_images['uid'] == subject_id)]
-            self.image_L.append(image_s.loc[image_s['projection'] == 'Lateral'])
-            self.image_F.append(image_s.loc[image_s['projection'] == 'Frontal'])
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
@@ -129,11 +131,11 @@ class OpenAIDataset(Dataset):
         chest_img_F = np.array(read_png(IMAGE_DIR + str(img_name_F)))
         chest_img_L = np.array(read_png(IMAGE_DIR + str(img_name_L)))
 
-        if self.transform:
-            chest_img_F = self.transform(chest_img_F)
-            chest_img_L = self.transform(chest_img_L)
+        print(chest_img_F)
+        chest_img_F = self.transform(chest_img_F)
+        chest_img_L = self.transform(chest_img_L)
 
-        print(self.findings[idx])
+        # print(self.findings[idx])
         sample = {
             'subject_id': torch.tensor(self.subject_ids[idx], dtype=torch.long),
             'finding': torch.tensor(self.findings[idx], dtype=torch.long),
@@ -157,12 +159,14 @@ class OpenAIDataset(Dataset):
         im = []
 
         for index, row in tqdm(self.csv_text.iterrows()):
-
             fi = row['findings'].split()
             im = row['impression'].split()
+
             # print(fi)
-            len_finding.append(len(fi))
+
             len_impression.append(len(im))
+            len_finding.append(len(fi))
+
             for word in fi:
                 word_len_finding.append(len(word))
                 wordbag.append(word)
