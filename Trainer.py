@@ -28,7 +28,7 @@ class OPENIDataModule(pl.LightningDataModule):
         self.test_set = None
         self.batch_size = batch_size
 
-    def setup(self, stage: Optional[str] = None):
+    def setup(self, stage: Optional[str] = 'train'):
         if stage == 'train':
             self.train_set = OpenAIDataset(file_name='indiana_reports_train',
                                            batch_size=64,
@@ -76,17 +76,17 @@ class Trainer:
                                        batch_size=64,
                                        transform=None)
 
-        self.val_set = OpenAIDataset(file_name='indiana_reports_val',
-                                     batch_size=64,
-                                     transform=None)
-
-        self.test_set = OpenAIDataset(file_name='indiana_reports_test',
-                                      batch_size=64,
-                                      transform=None)
-
-        self.dataset = OpenAIDataset(file_name='indiana_reports_cleaned',
-                                     batch_size=64,
-                                     transform=None)
+        # self.val_set = OpenAIDataset(file_name='indiana_reports_val',
+        #                              batch_size=64,
+        #                              transform=None)
+        #
+        # self.test_set = OpenAIDataset(file_name='indiana_reports_test',
+        #                               batch_size=64,
+        #                               transform=None)
+        #
+        # self.dataset = OpenAIDataset(file_name='indiana_reports_cleaned',
+        #                              batch_size=64,
+        #                              transform=None)
 
         self.train_dataloader = self.setup('train')
         self.S_DataLoader = self.setup('')
@@ -136,7 +136,7 @@ class Trainer:
         # self.embednet = nn.DataParallel(self.embednet, device_ids=self.gpus)
         # self.load_model()
 
-    def setup(self, stage: Optional[str] = None):
+    def setup(self, stage: Optional[str] = 'train'):
 
         if stage == 'train':
             return DataLoader(self.train_set)
@@ -146,11 +146,9 @@ class Trainer:
 
         if stage == 'val':
             return DataLoader(self.val_set)
-        else:
-            return DataLoader(self.dataset)
 
     def define_nets(self):
-        self.encoder = Encoder(vocab_size=self.dataset.num_tokens,
+        self.encoder = Encoder(vocab_size=self.train_set.num_tokens,
                                embedding_size=128,
                                hidden_size=128,
                                feature_base_dim=512).to(self.device)
@@ -554,8 +552,8 @@ class Trainer:
 
             # Train VCN by layer
 
-            print("Start training on Siamese {}".format(layer_id))
-            self.train_Siamese_layer(layer_id)
+            # print("Start training on Siamese {}".format(layer_id))
+            # self.train_Siamese_layer(layer_id)
 
             # Train Generator by layer
 

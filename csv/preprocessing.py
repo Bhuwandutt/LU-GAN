@@ -14,10 +14,11 @@ dataframe = dataframe.drop(columns=['MeSH', 'image', 'Problems', 'comparison'], 
 # print(dataframe.head)
 
 
-def checkNan(dataframe : pd.DataFrame):
-    NaN = dataframe.isnull().sum()
+
+def checkNan(datafram: pd.DataFrame):
+    NaN = datafram.isnull().sum()
     i = 0
-    for column in dataframe.columns:
+    for column in datafram.columns:
         print(f"Total Nan Values in {column} columns - {NaN[i]}")
         i += 1
 
@@ -103,7 +104,7 @@ dataframe['indication'] = preprocess_text(dataframe['indication'])
 dataframe['findings'] = preprocess_text(dataframe['findings'])
 dataframe['impression'] = preprocess_text(dataframe['impression'])
 
-checkNan(dataframe=dataframe)
+checkNan(datafram=dataframe)
 # dataframe['image'] = preprocess_text(dataframe['image'])
 # dataframe['Problems'] = preprocess_text(dataframe['Problems'])
 
@@ -119,14 +120,16 @@ dataframe['indication'] = dataframe['indication'].fillna('No Indication')
 dataframe['findings'] = dataframe['findings'].fillna('No Findings')
 dataframe['impression'] = dataframe['impression'].fillna('No Impression')
 
-checkNan(dataframe=dataframe)
+checkNan(datafram=dataframe)
 
 df = dataframe.sample(frac=1).reset_index(drop=True)
+df.to_csv(path_or_buf=CSV_DIR+'/indiana_reports_cleaned.csv', index=False)
 n_rows = df.shape[0]
-df_train = df.iloc[0: math.floor(n_rows * 0.6), :]
-df_val = df.iloc[math.floor(n_rows * 0.6):math.floor(n_rows * 0.8), :]
-df_test = df.iloc[math.floor(n_rows * 0.8):, :]
+df_train = df.iloc[0: math.floor(n_rows * 0.3), :]
+df_val = df.iloc[math.floor(n_rows * 0.3):math.floor(n_rows * 0.5), :]
+df_test = df.iloc[math.floor(n_rows * 0.5):math.floor(n_rows * 0.6), :]
 print(dataframe.shape)
+
 
 df_train.to_csv(path_or_buf=CSV_DIR+'/indiana_reports_train.csv', index=False)
 df_val.to_csv(path_or_buf=CSV_DIR+'/indiana_reports_val.csv', index=False)
