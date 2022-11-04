@@ -16,33 +16,83 @@ CSV_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/csv/'
 IMAGE_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/data/imgs/'
 
 
-def vcn_images():  # Get the list of images that don't have both frontal and lateral images.
+def vcn_images(uid: int):  # Get the list of images that don't have both frontal and lateral images.
 
     df = pd.read_csv(CSV_DIR+'indiana_projections.csv')
-    uid_list = []
-    for i in range(1, 4000):
-        df_ = df.loc[(df['uid'] == i)].values
-        if len(df_) != 2:
-            uid_list.append(i)
-    print(uid_list)
-    return uid_list
+    df_ = df.loc[(df['uid'] == uid)].values
+    if len(df_) == 2:
+        return True
+    return False
+
+
+class Rescale(object):
+    """Rescale the image in the sample to a given size
+    Args:
+        Output_size(tuple): Desired output size
+            tuple for output_size
+    """
+
+    def __init__(self, output_sizes):
+
+        new_h, new_w = output_sizes
+        self.resize = (int(new_h), int(new_w))
+
+    def __call__(self, image):
+
+        img = cv2.resize(image, dsize=self.resize, interpolation=cv2.INTER_CUBIC)
+        print("Rescale")
+        return img
+
+
+class Equalize(object):
+    def __init__(self,mode="Normal"):
+
+        self.mode = mode
+        self.equlizer = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+
+    def __call__(self, image):
+        if self.mode=="Normal":
+            equ = cv2.equalizeHist(image)
+        elif self.mode=="CLAHE":
+            equ = self.equlizer.apply(image)
+        print("Equalize")
+        return equ
+
+
+class ToTensor(object):
+
+    """Convert darray in sample to Tensors"""
+    def __call__(self, image):
+        print("To Tensor")
+        # torch image: channel * H * W
+        h, w = image.shape[:2]
+        image = image.reshape((1,h,w))/255
+        image = (image - 0.5) / 0.5
+        return image
 
 
 def read_png(filename):
     print(filename)
     image = None
     if os.path.exists(filename):
-        imag = cv2.imread(filename)
-        image = cv2.cvtColor(imag, cv2.COLOR_BGR2GRAY)
+        imag = cv2.imread(filename, 0)
+        image = cv2.cvtColor(imag, cv2.COLOR_GRAY2BGR)
     return image
 
+
+#
+# print(x)
+#
+# Tensor_ = ToTensor()
+# print(Tensor_(x.numpy()))
 
 class OpenAIDataset(Dataset):
 
     def __init__(self,
                  file_name: str,
                  batch_size: int = BATCH_SIZE,
-                 transform=transforms.Compose([transforms.ToTensor()])):
+                 transform=transforms.Compose([
+                                               ToTensor()])):
 
         super().__init__()
         self.filename = file_name
@@ -59,7 +109,6 @@ class OpenAIDataset(Dataset):
         self.image_L = []
         self.image_F = []
         self.subject_ids = []
-        self.num_tokens = 0
         self.word_dict = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/utils/dict.json'
         if os.path.exists(self.word_dict):
             with open(self.word_dict) as f:
@@ -73,15 +122,14 @@ class OpenAIDataset(Dataset):
                            self.max_word_len_impression, self.max_word_len_finding], f)
 
         for index, row in tqdm(self.csv_text.iterrows()):
-            if row['uid'] not in vcn_images():
+            if vcn_images((row['uid'])):
 
                 subject_id = row['uid']
                 self.subject_ids.append(subject_id)
                 image_ = self.csv_images.loc[
                     (self.csv_images['uid'] == subject_id)].values
-
-                self.image_L.append(image_[0][1])
-                self.image_F.append(image_[1][1])
+                self.image_F.append(image_[0][1])
+                self.image_L.append(image_[1][1])
 
                 fi = row['findings']
                 im = row['impression']
@@ -114,8 +162,6 @@ class OpenAIDataset(Dataset):
                                         constant_values=0)
                 self.impression.append(txt_impression)
 
-                # self.impression.append(impression)
-
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
@@ -123,22 +169,23 @@ class OpenAIDataset(Dataset):
         # For png data, load data and normalize
         img_name_F = self.image_F[idx]
         img_name_L = self.image_L[idx]
-        print(str(img_name_L))
 
         chest_img_F = np.array(read_png(IMAGE_DIR + str(img_name_F)))
         chest_img_L = np.array(read_png(IMAGE_DIR + str(img_name_L)))
+        x = torch.rand(size=[3, 32, 32])
+        # print(chest_img_F.shape)
+        chest_img_F = self.transform(x)
 
-        chest_img_F = chest_img_F
         chest_img_L = self.transform(chest_img_L)
 
         # print(self.findings[idx])
-        print(self.impression[idx])
+
         sample = {
             'subject_id': torch.tensor(self.subject_ids[idx], dtype=torch.long),
             'finding': torch.tensor(self.findings[idx], dtype=torch.long),
             'impression': torch.tensor(self.impression[idx], dtype=torch.long),
-            'image_F': torch.tensor(chest_img_F, dtype=torch.float),
-            'image_L': torch.tensor(chest_img_L, dtype=torch.float)
+            'image_F': torch.tensor(chest_img_F[idx], dtype=torch.float),
+            'image_L': torch.tensor(chest_img_L[idx], dtype=torch.float)
         }
         return sample
 

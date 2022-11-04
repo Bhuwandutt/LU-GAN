@@ -31,7 +31,7 @@ class Encoder(nn.Module):
         self.word_RNN1 = AttentionWordRNN(num_tokens=self.vocab_size,
                                           embed_size=self.embed_size,
                                           word_gru_hidden=self.hidden_size,
-                                          bidirectional=bi_direction,
+                                          bidirectional=True,
                                           dropout=dropout,
                                           batch_first=self.batch_first)
         # Sentence-Level LSTM
@@ -62,28 +62,30 @@ class Encoder(nn.Module):
             nn.LeakyReLU(0.2, True)
         )
 
-        def forward(self, x1, x2, hidden=None):
-            outputs1 = self.forward_once1(x1)
-            outputs2 = self.forward_once2(x2)
+    def forward(self, x1, x2, hidden=None):
+        outputs1 = self.forward_once1(x1)
+        outputs2 = self.forward_once2(x2)
 
-            outputs = torch.cat((outputs1, outputs2), 1)
+        outputs = torch.cat((outputs1, outputs2), 1)
 
-            outputs = self.fc(outputs)
-            return outputs, hidden
+        outputs = self.fc(outputs)
+        return outputs, hidden
 
-        def forward_once1(self, x, state_word=None):
-            batch, sent_len, word_num = x.shape
+    def forward_once1(self, x, state_word=None):
+        print(x.shape)
+        batch, sent_len = x.shape
 
-            x = x.view(batch * sent_len, -1)
-            word_embed, state_word, _ = self.word_RNN1(x)
-            all_word_embed = word_embed.view(batch, sent_len, -1)
-            sent_embed, state_sent, _ = self.setence_RNN1(all_word_embed)
-            return sent_embed
+        x = x.view(batch * sent_len, -1)
+        word_embed, state_word, _ = self.word_RNN1(x)
+        all_word_embed = word_embed.view(batch, sent_len, -1)
+        sent_embed, state_sent, _ = self.sentence_RNN1(all_word_embed)
 
-        def forward_once2(self, x, state_word=None):
-            batch, sent_len, word_num = x.shape
-            x = x.view(batch * sent_len, -1)
-            word_embed, state_word, _ = self.word_RNN2(x)
-            all_word_embed = word_embed.view(batch, sent_len, -1)
-            sent_embed, state_sent, _ = self.setence_RNN2(all_word_embed)
-            return sent_embed
+        return sent_embed
+
+    def forward_once2(self, x, state_word=None):
+        batch, sent_len = x.shape
+        x = x.view(batch * sent_len, -1)
+        word_embed, state_word, _ = self.word_RNN2(x)
+        all_word_embed = word_embed.view(batch, sent_len, -1)
+        sent_embed, state_sent, _ = self.sentence_RNN2(all_word_embed)
+        return sent_embed

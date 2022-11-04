@@ -81,6 +81,7 @@ class AttentionWordRNN(nn.Module):
         self.word_gru_hidden = word_gru_hidden
         self.bidirectional = bidirectional
         self.num_dir = 2 if bidirectional else 1
+        print("Number of Tokens = {}", num_tokens)
         self.embed = nn.Embedding(num_tokens, embed_size)
         self.init_weights()
 
@@ -114,10 +115,10 @@ class AttentionWordRNN(nn.Module):
 
         # batch * seq_len -> batch x seq_len
         # word_attn = word_attn.view(batch, word_len)
-        word_attn_norm = torch.softmax(word_attn,dim=1)
+        word_attn_norm = torch.softmax(word_attn, dim=1)
 
         word_attn_vectors = output_word * word_attn_norm.unsqueeze(2)
-        word_attn_vectors= word_attn_vectors.sum(dim=1)
+        word_attn_vectors = word_attn_vectors.sum(dim=1)
 
         return word_attn_vectors, state_word, word_attn_norm
 

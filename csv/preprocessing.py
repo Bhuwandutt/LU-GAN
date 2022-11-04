@@ -125,9 +125,9 @@ checkNan(datafram=dataframe)
 df = dataframe.sample(frac=1).reset_index(drop=True)
 df.to_csv(path_or_buf=CSV_DIR+'/indiana_reports_cleaned.csv', index=False)
 n_rows = df.shape[0]
-df_train = df.iloc[0: math.floor(n_rows * 0.3), :]
-df_val = df.iloc[math.floor(n_rows * 0.3):math.floor(n_rows * 0.5), :]
-df_test = df.iloc[math.floor(n_rows * 0.5):math.floor(n_rows * 0.6), :]
+df_train = df.iloc[0: math.floor(n_rows * 0.03), :]
+df_val = df.iloc[math.floor(n_rows * 0.03):math.floor(n_rows * 0.05), :]
+df_test = df.iloc[math.floor(n_rows * 0.05):math.floor(n_rows * 0.06), :]
 print(dataframe.shape)
 
 

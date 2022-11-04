@@ -5,7 +5,7 @@ from pytorch_lightning.utilities.types import EVAL_DATALOADERS
 from torch import nn
 import numpy as np
 from OpenAIDataset import OpenAIDataset
-from Decoder import Decoder, MultiscaleDecoder
+from Decoder import Decoder, MultiscaleDecoder, PDecoder
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from Encoder import Encoder
@@ -72,9 +72,7 @@ class Trainer:
 
         # self.DataLoader.setup(stage='None')
 
-        self.train_set = OpenAIDataset(file_name='indiana_reports_train',
-                                       batch_size=64,
-                                       transform=None)
+
 
         # self.val_set = OpenAIDataset(file_name='indiana_reports_val',
         #                              batch_size=64,
@@ -88,7 +86,7 @@ class Trainer:
         #                              batch_size=64,
         #                              transform=None)
 
-        self.train_dataloader = self.setup('train')
+        self.train_dataloader = self.setup()
         self.S_DataLoader = self.setup('')
         # Set up the DataModule for training by explicit
         self.S_optimizer = None
@@ -106,7 +104,7 @@ class Trainer:
         self.decoder_F = None
         self.decoder_L = None
         self.encoder = None
-        self.image_size = [2048, 2048]
+        self.image_size = [256, 256]
         self.device = torch.device('mps')
         self.G_LR = [0.0003, 0.0003, 0.0002, 0.0001]
         self.D_LR = [0.0003, 0.0003, 0.0002, 0.0001]
@@ -118,10 +116,6 @@ class Trainer:
         # Loss Function
         self.G_criterion = nn.MSELoss().to(self.device)
         self.S_criterion = nn.BCELoss().to(self.device)
-
-        # self.train_dataset = OPENIDataModule().setup()
-        # self.test_dataset = OPENIDataModule().test_set()
-        # self.val_dataset = OPENIDataModule().val_set()
 
         self.base_size = 32
         self.P_ratio = int(np.log2(self.image_size[0] // self.base_size))
@@ -138,6 +132,9 @@ class Trainer:
 
     def setup(self, stage: Optional[str] = 'train'):
 
+        self.train_set = OpenAIDataset(file_name='indiana_reports_train',
+                                       batch_size=64,
+                                       transform=None)
         if stage == 'train':
             return DataLoader(self.train_set)
 
@@ -148,25 +145,25 @@ class Trainer:
             return DataLoader(self.val_set)
 
     def define_nets(self):
-        self.encoder = Encoder(vocab_size=self.train_set.num_tokens,
+        self.encoder = Encoder(vocab_size=self.train_set.vocab_size,
                                embedding_size=128,
                                hidden_size=128,
                                feature_base_dim=512).to(self.device)
         decoders_F = []
         decoders_L = []
         first_decoder = Decoder(input_dim=512,
-                                feature_base_dim=512).to(self.device)
+                                feature_base_dim=512, uprate=self.base_ratio).to(self.device)
         # first_decoder.apply(init_weights)
         decoders_F.append(first_decoder)
         decoders_L.append(first_decoder)
 
         for i in range(1, self.P_ratio + 1):
             nf = 128
-            decoder = Decoder(input_dim=512,
-                              feature_base_dim=nf).to(self.device)
+            Pdecoder = PDecoder(input_dim=512,
+                                feature_base_dim=nf).to(self.device)
             # decoder.apply(init_weights)
-            decoders_F.append(decoder)
-            decoders_L.append(decoder)
+            decoders_F.append(Pdecoder)
+            decoders_L.append(Pdecoder)
         #
         # # first_decoder.apply(init_weights)
         #
@@ -256,15 +253,14 @@ class Trainer:
 
     def Loss_on_layer(self, image, finding, impression, layer_id, decoder):
 
-        # Pretrain genertaor with batch
-        # :image image batch
-        # :text text batch
-
         txt_emded, hidden = self.encoder(finding, impression)
-        r_image = F.interpolate(image, size=(2 ** layer_id) * self.base_size)
+        print("Image Size ",image.size())
+        r_image = F.interpolate(image, size=(2**layer_id)*self.base_size)
+        print("R IMAGE {}",r_image.size())
 
         self.G_optimizer.zero_grad()
         pre_image = decoder(txt_emded, layer_id)
+        print(pre_image.size())
         loss = self.G_criterion(pre_image.float(), r_image.float())
         loss.backward()
         self.G_optimizer.step()
@@ -341,7 +337,8 @@ class Trainer:
             netD (network)              -- discriminator network
             real_data (tensor array)    -- real images
             fake_data (tensor array)    -- generated images from the generator
-            device (str)                -- GPU / CPU: from torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')
+            device (str)                -- GPU / CPU: from torch.device('cuda:{}'.format(self.gpu_ids[0]))
+                                            if self.gpu_ids else torch.device('cpu')
             type (str)                  -- if we mix real and fake data or not [real | fake | mixed].
             constant (float)            -- the constant used in formula ( | |gradient||_2 - constant)^2
             lambda_gp (float)           -- weight for this loss
@@ -425,10 +422,12 @@ class Trainer:
             self.decoder_F.train()
             self.decoder_L.train()
             for idx, batch in enumerate(self.train_dataloader):
+                print("Train")
                 finding = batch['finding'].to(self.device)
                 impression = batch['impression'].to(self.device)
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
+                print(image_f.size())
 
                 loss_f, pre_image_f, r_image_f = self.Loss_on_layer(image_f, finding, impression, layer_id,
                                                                     self.decoder_F)
