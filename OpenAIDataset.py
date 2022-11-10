@@ -123,8 +123,6 @@ class OpenAIDataset(Dataset):
                            self.max_word_len_impression, self.max_word_len_finding], f)
 
         for index, row in tqdm(self.csv_text.iterrows()):
-            #if vcn_images((row['uid'])):
-
             subject_id = row['uid']
             self.subject_ids.append(subject_id)
             image_ = self.csv_images.loc[
@@ -245,3 +243,67 @@ class OpenAIDataset(Dataset):
         print("Max Impression: Sentence length {} \t Word Length {}".format(max_len_im, max_word_len_im))
         return word_to_idx, vocab_len, max_len_im, max_len_fi, max_word_len_im, max_word_len_fi
 
+
+class ViewConsistencyDataset:
+
+    def __init__(self, file_name: str,
+                 transform=transforms.Compose([Rescale((256, 256)),
+                                               ToTensor()])):
+
+        self.image_L = []
+        self.image_F = []
+        self.subject_ids = []
+        self.csv_text = pd.read_csv(CSV_DIR + file_name + '.csv')
+        self.csv_images = pd.read_csv(CSV_DIR + 'indiana_projections.csv')
+        self.data_dir = PATH_DATASETS
+        self.num_workers = NUM_WORKERS
+        self.transform = transform
+
+        for index, row in tqdm(self.csv_text.iterrows()):
+            subject_id = row['uid']
+            self.subject_ids.append(subject_id)
+            image_ = self.csv_images.loc[
+                (self.csv_images['uid'] == subject_id)].values
+            self.image_F.append(image_[0][1])
+            self.image_L.append(image_[1][1])
+
+    def __len__(self):
+        return len(self.csv_text)
+
+    def get_a_pair(self, idx):
+
+        img_name_F = self.image_F[idx]
+        img_name_L = self.image_L[idx]
+
+        chest_img_F = np.array(read_png(IMAGE_DIR + str(img_name_F)))
+        chest_img_L = np.array(read_png(IMAGE_DIR + str(img_name_L)))
+
+        chest_img_F = self.transform(chest_img_F)
+        # print("After Transformation", chest_img_F.shape)
+        chest_img_L = self.transform(chest_img_L)
+        # print(self.findings[idx])
+
+        sample = {
+            'image_F': torch.tensor(chest_img_F, dtype=torch.float),
+            'image_L': torch.tensor(chest_img_L, dtype=torch.float)
+        }
+        return sample
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        sample = self.get_a_pair(idx)
+        p = random.uniform(0, 1)
+        if p > 0.5:
+            # Randomly choose a sample idx!=n_idx
+            n_idx = idx
+            while idx == n_idx:
+                n_idx = random.randint(0, self.__len__() - 1)
+            negative = self.get_a_pair(n_idx)
+            sample['image_L'] = negative['image_L']
+            sample['label'] = torch.ones(1).float()
+        else:
+            sample['label'] = torch.zeros(1).float()
+        return sample
+
+        # For png data, load data and normalize

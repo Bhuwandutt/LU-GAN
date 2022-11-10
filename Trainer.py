@@ -1,7 +1,7 @@
 from typing import Optional
 import os
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS
-from OpenAIDataset import OpenAIDataset
+from OpenAIDataset import OpenAIDataset, ViewConsistencyDataset
 from Decoder import Decoder, MultiscaleDecoder, PDecoder
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
@@ -20,17 +20,18 @@ class OPENIDataModule(pl.LightningDataModule):
     def __init__(self, batch_size: int = 12, shuffle: bool = False):
         super(OPENIDataModule, self).__init__()
 
-        self.dataset = None
-        self.val_set = None
-        self.train_set = None
-        self.test_set = None
+        self.siamese_set = None  # DataSet for training View Consistency Network
+        self.dataset = None  # DataSet containing all the images and reports
+        self.val_set = None  # Validation Dataset Split ( For changing the split ratio, see pre-processiong.py)
+        self.train_set = None  # Training Dataset
+        self.test_set = None  # Testing Dataset
         self.batch_size = batch_size
 
     def setup(self, stage: Optional[str] = 'train'):
         if stage == 'train':
             self.train_set = OpenAIDataset(file_name='indiana_reports_train',
-                                           batch_size=64,
-                                           transform=None)
+                                           transform=None)  # Transform is set to none but Transformation happens in
+            # DataClass
         if stage == 'validation':
             self.val_set = OpenAIDataset(file_name='indiana_reports_val',
                                          transform=None)
@@ -38,9 +39,10 @@ class OPENIDataModule(pl.LightningDataModule):
         if stage == 'test':
             self.test_set = OpenAIDataset(file_name='indiana_reports_test',
                                           transform=None)
+        if stage == 'sia':
+            self.siamese_set = ViewConsistencyDataset(file_name='indiana_reports_cleaned')
         else:
             self.dataset = OpenAIDataset(file_name='indiana_reports_cleaned',
-                                         batch_size=64,
                                          transform=None)
 
     def train_dataloader(self):
@@ -54,33 +56,22 @@ class OPENIDataModule(pl.LightningDataModule):
 
     def full_dataloader(self):
         return DataLoader(self.dataset)
-
+    
 
 class Trainer:
     train_set: OpenAIDataset
 
     def __init__(self):
         super(Trainer, self).__init__()
-        self.S_DataLoader = None
+        self.siamese_set = None  # DataSet for training View Consistency Network
+        self.S_DataLoader = None  # DataSet containing all the images and reports
         self.val_set = None
         self.test_set = None
         self.DISP_FREQs = [10, 20, 30, 40]
         self.writer = SummaryWriter(os.path.join("runs"), 'Text-to-image XRayGAN OPENI256')
-        # self.DataLoader = OPENIDataModule()  # Create an object of Lightning DataModule
-        # self.DataLoader.setup(stage='train')
 
-        # self.DataLoader.setup(stage='None')
-
-        # self.val_set = OpenAIDataset(file_name='indiana_reports_val',
-        #                              batch_size=64,
-        #                              transform=None)
-        #
-        # 
-        #
-        # self.dataset = OpenAIDataset(file_name='indiana_reports_cleaned',
-        #                              batch_size=64,
-        #                              transform=None)
         self.train_dataloader = self.setup('train')
+        self.sia_dataloader = self.setup('sia')
         # Set up the DataModule for training by explicit
         self.S_optimizer = None
         self.S_lr_scheduler = None
@@ -136,6 +127,10 @@ class Trainer:
         if stage == 'val':
             self.val_set = OpenAIDataset(file_name='indiana_reports_val')
             return DataLoader(self.val_set)
+        if stage == 'sia':
+            self.siamese_set = ViewConsistencyDataset(file_name='indiana_reports_test')
+            return DataLoader(self.siamese_set, drop_last=True)
+            
         else:
             self.S_DataLoader = OpenAIDataset(file_name='indiana_reports_cleaned')
 
@@ -159,15 +154,7 @@ class Trainer:
             # decoder.apply(init_weights)
             decoders_F.append(Pdecoder)
             decoders_L.append(Pdecoder)
-        #
-        # # first_decoder.apply(init_weights)
-        #
-        # for i in range(1, self.P_ratio + 1):
-        #     nf = 128
-        #     pdecoder = Decoder(input_dim=512,
-        #                        feature_base_dim=nf).to(self.device)
-        #     # pdecoder.apply(init_weights)
-        #
+
         self.decoder_L = MultiscaleDecoder(decoders_L).to(device=self.device)
         self.decoder_F = MultiscaleDecoder(decoders_F).to(device=self.device)
         self.embednet = Classifinet(backbone='resnet18').to(device=self.device)
@@ -247,7 +234,7 @@ class Trainer:
 
         txt_emded, hidden = self.encoder(finding, impression)
         # print("Input Image", image.shape)
-        r_image = F.interpolate(image, size=(2**layer_id)*32)
+        r_image = F.interpolate(image, size=(2 ** layer_id) * 32)
         # print("r_image", r_image.size())
         self.G_optimizer.zero_grad()
         pre_image = decoder(txt_emded, layer_id)
@@ -263,14 +250,14 @@ class Trainer:
         for epoch in range(self.SIAMESE_EPOCH[layer_id]):
             self.embednet.train()
             print('VCN Epoch [{}/{}]'.format(epoch, self.SIAMESE_EPOCH[layer_id]))
-            for idx, batch in enumerate(self.S_DataLoader):
+            for idx, batch in enumerate(self.sia_dataloader):
 
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
                 label = batch['label'].to(self.device)
 
-                r_image_f = F.interpolate(image_f, size=(2 ** layer_id) * self.base_size)
-                r_image_l = F.interpolate(image_l, size=(2 ** layer_id) * self.base_size)
+                r_image_f = F.interpolate(image_f, size=(2 ** layer_id)*32)
+                r_image_l = F.interpolate(image_l, size=(2 ** layer_id)*32)
 
                 self.S_optimizer.zero_grad()
                 pred = self.embednet(r_image_f, r_image_l)
@@ -300,8 +287,8 @@ class Trainer:
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
                 label = batch['label'].to(self.device)
-                r_image_f = F.interpolate(image_f, size=(2 ** layer_id) * self.base_size)
-                r_image_l = F.interpolate(image_l, size=(2 ** layer_id) * self.base_size)
+                r_image_f = F.interpolate(image_f, size=(2 ** layer_id)*32)
+                r_image_l = F.interpolate(image_l, size=(2 ** layer_id)*32)
 
                 pred = self.embednet(r_image_f, r_image_l)
                 pred[pred > 0.5] = 1
@@ -542,8 +529,8 @@ class Trainer:
 
             # Train VCN by layer
 
-            # print("Start training on Siamese {}".format(layer_id))
-            # self.train_Siamese_layer(layer_id)
+            print(f"Start training on Siamese {layer_id}")
+            self.train_Siamese_layer(layer_id)
 
             # Train Generator by layer
 

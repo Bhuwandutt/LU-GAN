@@ -207,7 +207,7 @@ class ClassificationLoss(nn.Module):
         loss = self.cretio(pred,target)
         return loss
 
-    def evaluate(self,embed_f, embed_l):
+    def evaluate(self, embed_f, embed_l):
         batch_size = embed_f.shape[0]
         index = np.arange(batch_size)
         new_index = index.copy() - 1
