@@ -1,9 +1,6 @@
 from typing import Optional
-import torch
 import os
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS
-from torch import nn
-import numpy as np
 from OpenAIDataset import OpenAIDataset
 from Decoder import Decoder, MultiscaleDecoder, PDecoder
 import pytorch_lightning as pl
@@ -15,6 +12,7 @@ from Discriminator import Discriminator
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 import json
+from tqdm import tqdm
 
 
 class OPENIDataModule(pl.LightningDataModule):
@@ -35,12 +33,10 @@ class OPENIDataModule(pl.LightningDataModule):
                                            transform=None)
         if stage == 'validation':
             self.val_set = OpenAIDataset(file_name='indiana_reports_val',
-                                         batch_size=64,
                                          transform=None)
 
         if stage == 'test':
             self.test_set = OpenAIDataset(file_name='indiana_reports_test',
-                                          batch_size=64,
                                           transform=None)
         else:
             self.dataset = OpenAIDataset(file_name='indiana_reports_cleaned',
@@ -65,6 +61,9 @@ class Trainer:
 
     def __init__(self):
         super(Trainer, self).__init__()
+        self.S_DataLoader = None
+        self.val_set = None
+        self.test_set = None
         self.DISP_FREQs = [10, 20, 30, 40]
         self.writer = SummaryWriter(os.path.join("runs"), 'Text-to-image XRayGAN OPENI256')
         # self.DataLoader = OPENIDataModule()  # Create an object of Lightning DataModule
@@ -72,22 +71,16 @@ class Trainer:
 
         # self.DataLoader.setup(stage='None')
 
-
-
         # self.val_set = OpenAIDataset(file_name='indiana_reports_val',
         #                              batch_size=64,
         #                              transform=None)
         #
-        # self.test_set = OpenAIDataset(file_name='indiana_reports_test',
-        #                               batch_size=64,
-        #                               transform=None)
+        # 
         #
         # self.dataset = OpenAIDataset(file_name='indiana_reports_cleaned',
         #                              batch_size=64,
         #                              transform=None)
-
-        self.train_dataloader = self.setup()
-        self.S_DataLoader = self.setup('')
+        self.train_dataloader = self.setup('train')
         # Set up the DataModule for training by explicit
         self.S_optimizer = None
         self.S_lr_scheduler = None
@@ -132,17 +125,19 @@ class Trainer:
 
     def setup(self, stage: Optional[str] = 'train'):
 
-        self.train_set = OpenAIDataset(file_name='indiana_reports_train',
-                                       batch_size=64,
-                                       transform=None)
         if stage == 'train':
+            self.train_set = OpenAIDataset(file_name='indiana_reports_train')
             return DataLoader(self.train_set)
 
         if stage == 'test':
+            self.test_set = OpenAIDataset(file_name='indiana_reports_test')
             return DataLoader(self.test_set)
 
         if stage == 'val':
+            self.val_set = OpenAIDataset(file_name='indiana_reports_val')
             return DataLoader(self.val_set)
+        else:
+            self.S_DataLoader = OpenAIDataset(file_name='indiana_reports_cleaned')
 
     def define_nets(self):
         self.encoder = Encoder(vocab_size=self.train_set.vocab_size,
@@ -191,10 +186,7 @@ class Trainer:
                                           milestones=self.LR_DECAY_EPOCH[layer_id],
                                           gamma=0.2)
 
-        self.D_optimizer = torch.optim.Adam([{'params': self.D_F.parameters()}] +
-                                            [{'params': self.D_L.parameters()}],
-                                            lr=self.D_LR[layer_id], betas=(0.9, 0.999))
-
+        self.D_optimizer = self.G_optimizer
         self.D_lr_scheduler = MultiStepLR(self.D_optimizer,
                                           milestones=self.LR_DECAY_EPOCH[layer_id],
                                           gamma=0.2)
@@ -254,13 +246,13 @@ class Trainer:
     def Loss_on_layer(self, image, finding, impression, layer_id, decoder):
 
         txt_emded, hidden = self.encoder(finding, impression)
-        print("Image Size ",image.size())
-        r_image = F.interpolate(image, size=(2**layer_id)*self.base_size)
-        print("R IMAGE {}",r_image.size())
-
+        # print("Input Image", image.shape)
+        r_image = F.interpolate(image, size=(2**layer_id)*32)
+        # print("r_image", r_image.size())
         self.G_optimizer.zero_grad()
         pre_image = decoder(txt_emded, layer_id)
-        print(pre_image.size())
+        # pre_image = F.interpolate(pre_image, size=(2*layer_id)*self.base_size)
+        # print("Pre Image", pre_image.size())
         loss = self.G_criterion(pre_image.float(), r_image.float())
         loss.backward()
         self.G_optimizer.step()
@@ -272,6 +264,7 @@ class Trainer:
             self.embednet.train()
             print('VCN Epoch [{}/{}]'.format(epoch, self.SIAMESE_EPOCH[layer_id]))
             for idx, batch in enumerate(self.S_DataLoader):
+
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
                 label = batch['label'].to(self.device)
@@ -421,20 +414,18 @@ class Trainer:
             self.encoder.train()
             self.decoder_F.train()
             self.decoder_L.train()
-            for idx, batch in enumerate(self.train_dataloader):
-                print("Train")
+            for idx, batch in tqdm(enumerate(self.train_dataloader)):
+                # print("Train")
                 finding = batch['finding'].to(self.device)
                 impression = batch['impression'].to(self.device)
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
-                print(image_f.size())
 
                 loss_f, pre_image_f, r_image_f = self.Loss_on_layer(image_f, finding, impression, layer_id,
                                                                     self.decoder_F)
                 loss_l, pre_image_l, r_image_l = self.Loss_on_layer(image_l, finding, impression, layer_id,
                                                                     self.decoder_L)
 
-                # print('Loss: {:.4f}'.format(loss.item()))
                 if ((idx + 1) % DISP_FREQ == 0) and idx != 0:
                     self.writer.add_scalar('Train_front {}_loss'.format(layer_id),
                                            loss_f.item(),

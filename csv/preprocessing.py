@@ -12,6 +12,18 @@ CSV_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/csv/'
 dataframe = pd.read_csv(CSV_DIR + "/" + 'indiana_reports.csv')
 dataframe = dataframe.drop(columns=['MeSH', 'image', 'Problems', 'comparison'], axis=1)
 # print(dataframe.head)
+df_projection = pd.read_csv(CSV_DIR + 'indiana_projections.csv')
+
+
+def vcn_images(uid: int):  # Get the list of images that don't have both frontal and lateral images.
+
+    df_vcn = df_projection.loc[(df_projection['uid'] == uid)].values
+    if len(df_vcn) == 2:
+        return True
+
+
+uid_list = []
+
 
 
 
@@ -40,7 +52,6 @@ def decontracted(phrase):  # Performs text de-contraction of words like won't to
 
 
 def preprocess_text(data):
-
     # extracts the information data from the xml file and does text preprocessing on them
     # here info can be 1 value in this list ["COMPARISON","INDICATION","FINDINGS","IMPRESSION"]
 
@@ -76,7 +87,7 @@ def preprocess_text(data):
         sentence = re.sub('9', 'nine', sentence)
         sentence = re.sub('year old', "", sentence)  # Occur multiple times in Indication feature but not necessary
         sentence = re.sub('yearold', "", sentence)
-        sentence = decontracted(sentence)  # perform decontraction
+        sentence = decontracted(sentence)  # perform de-contraction
         sentence = sentence.strip().lower()  # Strips the begining and end of the string of spaces and converts all
         # into lowercase
         sentence = " ".join(sentence.split())  # removes unwanted spaces
@@ -86,17 +97,16 @@ def preprocess_text(data):
 
     return preprocessed
 
+
 # Replacing the nan values
 
 
 column_list = list(dataframe)
 
-
 # dataframe['comparison'] = dataframe['comparison'].fillna('No Comparison')
 dataframe['indication'] = dataframe['indication'].fillna('No Indication')
 dataframe['findings'] = dataframe['findings'].fillna('No Findings')
 dataframe['impression'] = dataframe['impression'].fillna('No Impression')
-
 
 # dataframe['MeSH'] = preprocess_text(dataframe['MeSH'])
 # dataframe['comparison'] = preprocess_text(dataframe['comparison'])
@@ -109,10 +119,11 @@ checkNan(datafram=dataframe)
 # dataframe['Problems'] = preprocess_text(dataframe['Problems'])
 
 dataframe.replace("", "No Value", inplace=True)
-dataframe['indication_count'] = dataframe['indication'].astype(str).str.split().apply(lambda x: 0 if x == None else len(x))
+dataframe['indication_count'] = dataframe['indication'].astype(str).str.split().apply(
+    lambda x: 0 if x == None else len(x))
 dataframe['findings_count'] = dataframe['findings'].astype(str).str.split().apply(lambda x: 0 if x == None else len(x))
-dataframe['impression_count'] = dataframe['impression'].astype(str).str.split().apply(lambda x: 0 if x == None else len(x))
-
+dataframe['impression_count'] = dataframe['impression'].astype(str).str.split().apply(
+    lambda x: 0 if x == None else len(x))
 
 print(dataframe.head())
 
@@ -121,16 +132,22 @@ dataframe['findings'] = dataframe['findings'].fillna('No Findings')
 dataframe['impression'] = dataframe['impression'].fillna('No Impression')
 
 checkNan(datafram=dataframe)
+for index, row in df_projection.iterrows():
+    if vcn_images(index):
+        uid_list.append(index)
+    else:
+        pass
+
+dataframe = dataframe[dataframe['uid'].isin(uid_list)]
 
 df = dataframe.sample(frac=1).reset_index(drop=True)
-df.to_csv(path_or_buf=CSV_DIR+'/indiana_reports_cleaned.csv', index=False)
+df.to_csv(path_or_buf=CSV_DIR + '/indiana_reports_cleaned.csv', index=False)
 n_rows = df.shape[0]
 df_train = df.iloc[0: math.floor(n_rows * 0.03), :]
 df_val = df.iloc[math.floor(n_rows * 0.03):math.floor(n_rows * 0.05), :]
 df_test = df.iloc[math.floor(n_rows * 0.05):math.floor(n_rows * 0.06), :]
 print(dataframe.shape)
 
-
-df_train.to_csv(path_or_buf=CSV_DIR+'/indiana_reports_train.csv', index=False)
-df_val.to_csv(path_or_buf=CSV_DIR+'/indiana_reports_val.csv', index=False)
-df_test.to_csv(path_or_buf=CSV_DIR+'/indiana_reports_test.csv', index=False)
+df_train.to_csv(path_or_buf=CSV_DIR + '/indiana_reports_train.csv', index=False)
+df_val.to_csv(path_or_buf=CSV_DIR + '/indiana_reports_val.csv', index=False)
+df_test.to_csv(path_or_buf=CSV_DIR + '/indiana_reports_test.csv', index=False)

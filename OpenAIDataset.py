@@ -8,9 +8,10 @@ from tqdm import tqdm
 import json
 import torchvision.transforms as transforms
 import random
+from PIL import Image
 
 PATH_DATASETS = os.environ.get("PATH_DATASETS", ".")
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 NUM_WORKERS = 1
 CSV_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/csv/'
 IMAGE_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/data/imgs/'
@@ -39,8 +40,8 @@ class Rescale(object):
 
     def __call__(self, image):
 
-        img = cv2.resize(image, dsize=self.resize, interpolation=cv2.INTER_CUBIC)
-        print("Rescale")
+        img = np.resize(image, new_shape=self.resize)
+        # print("Rescale")
         return img
 
 
@@ -55,7 +56,7 @@ class Equalize(object):
             equ = cv2.equalizeHist(image)
         elif self.mode=="CLAHE":
             equ = self.equlizer.apply(image)
-        print("Equalize")
+        # print("Equalize")
         return equ
 
 
@@ -63,20 +64,22 @@ class ToTensor(object):
 
     """Convert darray in sample to Tensors"""
     def __call__(self, image):
-        print("To Tensor")
+        # print("To Tensor")
         # torch image: channel * H * W
         h, w = image.shape[:2]
-        image = image.reshape((1,h,w))/255
+        image = image.reshape((1, h, w))/255
         image = (image - 0.5) / 0.5
         return image
 
 
 def read_png(filename):
-    print(filename)
+    # print(filename)
     image = None
     if os.path.exists(filename):
-        imag = cv2.imread(filename, 0)
-        image = cv2.cvtColor(imag, cv2.COLOR_GRAY2BGR)
+        imag = Image.open(filename)
+        image = imag.convert('L')
+
+        # image = cv2.cvtColor(imag, cv2.COLOR_BGR2GRAY)
     return image
 
 
@@ -90,8 +93,7 @@ class OpenAIDataset(Dataset):
 
     def __init__(self,
                  file_name: str,
-                 batch_size: int = BATCH_SIZE,
-                 transform=transforms.Compose([
+                 transform=transforms.Compose([Rescale((256, 256)),
                                                ToTensor()])):
 
         super().__init__()
@@ -100,7 +102,6 @@ class OpenAIDataset(Dataset):
         self.csv_text = pd.read_csv(CSV_DIR + file_name + '.csv')
         self.csv_images = pd.read_csv(CSV_DIR + 'indiana_projections.csv')
         self.data_dir = PATH_DATASETS
-        self.batch_size = batch_size
         self.num_workers = NUM_WORKERS
         self.transform = transform
 
@@ -122,45 +123,45 @@ class OpenAIDataset(Dataset):
                            self.max_word_len_impression, self.max_word_len_finding], f)
 
         for index, row in tqdm(self.csv_text.iterrows()):
-            if vcn_images((row['uid'])):
+            #if vcn_images((row['uid'])):
 
-                subject_id = row['uid']
-                self.subject_ids.append(subject_id)
-                image_ = self.csv_images.loc[
-                    (self.csv_images['uid'] == subject_id)].values
-                self.image_F.append(image_[0][1])
-                self.image_L.append(image_[1][1])
+            subject_id = row['uid']
+            self.subject_ids.append(subject_id)
+            image_ = self.csv_images.loc[
+                (self.csv_images['uid'] == subject_id)].values
+            self.image_F.append(image_[0][1])
+            self.image_L.append(image_[1][1])
 
-                fi = row['findings']
-                im = row['impression']
-                txt_finding = []
-                txt_impression = []
+            fi = row['findings']
+            im = row['impression']
+            txt_finding = []
+            txt_impression = []
 
-                for w in fi.split():
-                    txt_finding_sen = self.word_to_idx[w]
-                    txt_finding_sen = np.pad(txt_finding_sen,
-                                             (self.max_word_len_finding - len(str(txt_finding_sen)), 0),
-                                             'constant', constant_values=0)
-                    txt_finding.append(txt_finding_sen)
+            for w in fi.split():
+                txt_finding_sen = self.word_to_idx[w]
+                txt_finding_sen = np.pad(txt_finding_sen,
+                                         (self.max_word_len_finding - len(str(txt_finding_sen)), 0),
+                                         'constant', constant_values=0)
+                txt_finding.append(txt_finding_sen)
 
-                for w in im.split():
-                    txt_impression_sen = self.word_to_idx[w]
-                    txt_impression_sen = np.pad(txt_impression_sen,
-                                                (self.max_word_len_impression - len(str(txt_impression_sen)), 0),
-                                                'constant', constant_values=0)
-                    txt_impression.append(txt_impression_sen)
+            for w in im.split():
+                txt_impression_sen = self.word_to_idx[w]
+                txt_impression_sen = np.pad(txt_impression_sen,
+                                            (self.max_word_len_impression - len(str(txt_impression_sen)), 0),
+                                            'constant', constant_values=0)
+                txt_impression.append(txt_impression_sen)
 
-                txt_finding = np.pad(np.array(txt_finding),
-                                     (self.max_len_finding - len(txt_finding), 0),
-                                     'constant',
-                                     constant_values=0)
-                self.findings.append(txt_finding)
+            txt_finding = np.pad(np.array(txt_finding),
+                                 (self.max_len_finding - len(txt_finding), 0),
+                                 'constant',
+                                 constant_values=0)
+            self.findings.append(txt_finding)
 
-                txt_impression = np.pad(np.array(txt_impression),
-                                        (self.max_len_impression - len(txt_impression), 0),
-                                        'constant',
-                                        constant_values=0)
-                self.impression.append(txt_impression)
+            txt_impression = np.pad(np.array(txt_impression),
+                                    (self.max_len_impression - len(txt_impression), 0),
+                                    'constant',
+                                    constant_values=0)
+            self.impression.append(txt_impression)
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
@@ -172,10 +173,9 @@ class OpenAIDataset(Dataset):
 
         chest_img_F = np.array(read_png(IMAGE_DIR + str(img_name_F)))
         chest_img_L = np.array(read_png(IMAGE_DIR + str(img_name_L)))
-        x = torch.rand(size=[3, 32, 32])
-        # print(chest_img_F.shape)
-        chest_img_F = self.transform(x)
 
+        chest_img_F = self.transform(chest_img_F)
+        # print("After Transformation", chest_img_F.shape)
         chest_img_L = self.transform(chest_img_L)
 
         # print(self.findings[idx])
@@ -184,8 +184,8 @@ class OpenAIDataset(Dataset):
             'subject_id': torch.tensor(self.subject_ids[idx], dtype=torch.long),
             'finding': torch.tensor(self.findings[idx], dtype=torch.long),
             'impression': torch.tensor(self.impression[idx], dtype=torch.long),
-            'image_F': torch.tensor(chest_img_F[idx], dtype=torch.float),
-            'image_L': torch.tensor(chest_img_L[idx], dtype=torch.float)
+            'image_F': torch.tensor(chest_img_F, dtype=torch.float),
+            'image_L': torch.tensor(chest_img_L, dtype=torch.float)
         }
         return sample
 

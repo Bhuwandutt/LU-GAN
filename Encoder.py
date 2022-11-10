@@ -72,7 +72,7 @@ class Encoder(nn.Module):
         return outputs, hidden
 
     def forward_once1(self, x, state_word=None):
-        print(x.shape)
+        # print(x.shape)
         batch, sent_len = x.shape
 
         x = x.view(batch * sent_len, -1)

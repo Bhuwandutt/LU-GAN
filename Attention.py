@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
-
+from transformers import AutoTokenizer, AutoModel
 
 # Functions to accomplish attention
+
 
 def batch_matmul_bias(seq, weight, bias, non_linearity=''):
     s = None
@@ -81,7 +82,7 @@ class AttentionWordRNN(nn.Module):
         self.word_gru_hidden = word_gru_hidden
         self.bidirectional = bidirectional
         self.num_dir = 2 if bidirectional else 1
-        print("Number of Tokens = {}", num_tokens)
+        print(f"Number of Tokens = {num_tokens}")
         self.embed = nn.Embedding(num_tokens, embed_size)
         self.init_weights()
 
@@ -172,6 +173,21 @@ class AttentionSentRNN(nn.Module):
         # sent_attn_vectors = attention_mul2(output_sent, sent_attn_norm)
 
         return sent_attn_vectors, state_sent, sent_attn_norm
+
+
+class PubMedBERT(nn.Module):
+    def __init__(self, num_tokens,
+                 embed_size,
+                 word_gru_hidden,
+                 dropout):
+        
+        super(PubMedBERT, self).__init__()
+
+        tokenizer = AutoTokenizer.from_pretrained('michiyasunaga/BioLinkBERT-base')
+        model = AutoModel.from_pretrained('michiyasunaga/BioLinkBERT-base')
+        inputs = tokenizer("Sunitinib is a tyrosine kinase inhibitor", return_tensors="pt")
+
+        self.sent_rnn = model(inputs)
 
 
 if __name__ == "__main__":

@@ -19,9 +19,9 @@ brotlipy==0.7.0
 cachetools==4.2.2
 certifi==2022.9.24
 cffi==1.15.1
-charset-normalizer==2.0.4
+charset-normalizer==3.0.0
 click==8.0.4
-cryptography==38.0.1
+cryptography==38.0.3
 cycler==0.11.0
 debugpy==1.5.1
 decorator==5.1.1
@@ -133,10 +133,10 @@ tensorflow-metal==0.5.0
 termcolor==1.1.0
 terminado==0.13.1
 testpath==0.6.0
-torch==1.13.0.dev20220926
+torch~=1.13.0.dev20220803
 torchaudio==0.14.0.dev20220603
 torchmetrics==0.10.0
-torchvision==0.14.0.dev20220926
+torchvision~=0.14.0.dev20220803
 tornado==6.2
 tqdm==4.64.0
 traitlets==5.1.1
@@ -151,3 +151,5 @@ widgetsnbextension==3.5.2
 wrapt==1.14.1
 yarl==1.8.1
 zipp==3.8.1
+
+transformers~=4.24.0

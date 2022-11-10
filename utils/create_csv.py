@@ -1,9 +1,16 @@
 import os
-import pandas
+import pandas as pd
 from tqdm import tqdm
 import json
 from lxml import etree as et
 
+def vcn_images(uid: int):  # Get the list of images that don't have both frontal and lateral images.
+
+    df = pd.read_csv(CSV_DIR+'indiana_projections.csv')
+    df_ = df.loc[(df['uid'] == uid)].values
+    if len(df_) == 2:
+        return True
+    return False
 
 def find_parentImage(xmlfile):
     parser = et.XMLParser(recover=True)
@@ -24,7 +31,7 @@ def test_XML(xmlfile):
             return False
     return True
 
-
+# /csv/
 basepath = "/Users/bhuwandutt/PycharmProjects/BSProject"
 imagedir = "/Users/bhuwandutt/PycharmProjects/BSProject/data/imgs"
 report_root = '/Users/bhuwandutt/PycharmProjects/BSProject/data/reports/ecgen-radiology'
