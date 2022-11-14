@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import cv2
 import os
+from PIL import Image
 
 CSV_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/csv/'
 IMAGE_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/data/imgs/'

@@ -157,7 +157,7 @@ class Trainer:
 
         self.decoder_L = MultiscaleDecoder(decoders_L).to(device=self.device)
         self.decoder_F = MultiscaleDecoder(decoders_F).to(device=self.device)
-        self.embednet = Classifinet(backbone='resnet18').to(device=self.device)
+        self.embednet = Classifinet(backbone='alex').to(device=self.device)
 
     def define_opt(self, layer_id):
 
@@ -266,24 +266,24 @@ class Trainer:
                 self.S_optimizer.step()
 
                 # if ((idx + 1) % DISP_FREQ == 0) and idx != 0:
-
-                self.writer.add_scalar('Train_Siamese {}_loss'.format(layer_id),
-                                       loss.item(),
-                                       epoch * len(self.S_DataLoader) + idx)
-
-                self.writer.add_images("Train_front_{}_Original".format(layer_id),
-                                       (r_image_f + 1) / 2,
-                                       epoch * len(self.S_DataLoader) + idx)
-                self.writer.add_images("Train_lateral_{}_Original".format(layer_id),
-                                       (r_image_l + 1) / 2,
-                                       epoch * len(self.S_DataLoader) + idx)
+                #
+                # self.writer.add_scalar('Train_Siamese {}_loss'.format(layer_id),
+                #                        loss.item(),
+                #                        epoch * len(self.S_DataLoader) + idx)
+                #
+                # self.writer.add_images("Train_front_{}_Original".format(layer_id),
+                #                        (r_image_f + 1) / 2,
+                #                        epoch * len(self.S_DataLoader) + idx)
+                # self.writer.add_images("Train_lateral_{}_Original".format(layer_id),
+                #                        (r_image_l + 1) / 2,
+                #                        epoch * len(self.S_DataLoader) + idx)
 
             self.S_lr_scheduler.step(epoch)
 
             self.embednet.eval()
             total = 0
             correct = 0
-            for idx, batch in enumerate(self.S_DataLoader):
+            for idx, batch in enumerate(self.sia_dataloader):
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
                 label = batch['label'].to(self.device)
@@ -396,17 +396,23 @@ class Trainer:
 
     def train_layer(self, layer_id):
         DISP_FREQ = self.DISP_FREQs[layer_id]
-        for epoch in range(20):
+        for epoch in range(10):
             print('Generator Epoch [{}/20]'.format(epoch))
             self.encoder.train()
             self.decoder_F.train()
             self.decoder_L.train()
             for idx, batch in tqdm(enumerate(self.train_dataloader)):
                 # print("Train")
+
                 finding = batch['finding'].to(self.device)
                 impression = batch['impression'].to(self.device)
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
+
+                print(f"Finding Shape = {finding.size()}")
+                print(f'Impression shape = {impression.size()}')
+                print(f'Image Frontal shape = {image_f.size()}')
+                print(f'Image Lateral shape ={ image_l.size()}')
 
                 loss_f, pre_image_f, r_image_f = self.Loss_on_layer(image_f, finding, impression, layer_id,
                                                                     self.decoder_F)
@@ -530,8 +536,8 @@ class Trainer:
             # Train VCN by layer
 
             print(f"Start training on Siamese {layer_id}")
-            self.train_Siamese_layer(layer_id)
 
+            # self.train_Siamese_layer(layer_id)
             # Train Generator by layer
 
             if layer_id == 0:

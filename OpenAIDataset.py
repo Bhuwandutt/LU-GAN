@@ -1,7 +1,3 @@
-import os
-import cv2
-import numpy as np
-import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -10,7 +6,6 @@ import torchvision.transforms as transforms
 import random
 from utils.utils import *
 
-from PIL import Image
 
 PATH_DATASETS = os.environ.get("PATH_DATASETS", ".")
 BATCH_SIZE = 32
@@ -92,6 +87,13 @@ class OpenAIDataset(Dataset):
             self.impression.append(txt_impression)
 
     def __getitem__(self, idx):
+        # The function is called to retrieve items from the Dataset. Items are called using index.
+        # The items are then converted (from numpy arrays) to torch object and returned as a dictionary of torch values
+        # The size of numpy/torch are as follows :-
+        #                                     finding[i] = torch.Size([1, n+1] ) n =Maximum length of Finding (165)
+        #                                     impression[i] = torch.size([1, k+1] ) k = Max length of Impression(124)
+        #                                     image_f[i] = torch.Size([1, 1, 256, 256])
+        #                                     image_l[i] = torch.size([1, 1, 256, 256])
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
@@ -105,6 +107,7 @@ class OpenAIDataset(Dataset):
         chest_img_F = self.transform(chest_img_F)
         # print("After Transformation", chest_img_F.shape)
         chest_img_L = self.transform(chest_img_L)
+        # print(self.findings[idx].shape)
 
         # print(self.findings[idx])
 
