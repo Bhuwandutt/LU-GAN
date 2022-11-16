@@ -55,7 +55,7 @@ class Discriminator(nn.Module):
                 self.norm2d(nf),
                 nn.LeakyReLU(0.2, True)
             )
-            self.downs.add_module('down_{}'.format(i),block)
+            self.downs.add_module('down_{}'.format(i), block)
 
         # 1 x 1 x input_dim -> 1 x 1 x (8 x bf)
         self.textfc = nn.Linear(self.txt_input_dim, self.txt_dim)
@@ -67,26 +67,26 @@ class Discriminator(nn.Module):
             nn.Conv2d(nf,
                       1,
                       kernel_size=4,
-                      padding =1)
+                      padding=1)
         )
 
-        def forward(self, x, txt_embedding):
-            # 64 x 64 x 1 -> 64 x 64 x bf
-            x = self.conv1(x)
+    def forward(self, x, txt_embedding):
+        # 64 x 64 x 1 -> 64 x 64 x bf
+        x = self.conv1(x)
 
-            x = self.downs(x)
-            s_size = x.size(2)
-            # 1 x 1 x input_dim -> 1 x 1 x (8 x bf)
-            embedding = self.textfc(txt_embedding)
+        x = self.downs(x)
+        s_size = x.size(2)
+        # 1 x 1 x input_dim -> 1 x 1 x (8 x bf)
+        embedding = self.textfc(txt_embedding)
 
-            # 1 x 1 x (8 x bf) -> 4 x 4 x (8 x bf)
-            embedding = embedding.view(-1, self.txt_dim, 1, 1)
-            embedding = embedding.repeat(1, 1, s_size, s_size)
-            embedding = self.textBN(embedding)
-            embedding = self.textAcc(embedding)
+        # 1 x 1 x (8 x bf) -> 4 x 4 x (8 x bf)
+        embedding = embedding.view(-1, self.txt_dim, 1, 1)
+        embedding = embedding.repeat(1, 1, s_size, s_size)
+        embedding = self.textBN(embedding)
+        embedding = self.textAcc(embedding)
 
-            # 4 x 4 x (8 x bf)+ 4 x 4 x (8 x bf) -> 4 x 4 x (16 x bf)
-            x = torch.cat((x, embedding), dim=1)
+        # 4 x 4 x (8 x bf)+ 4 x 4 x (8 x bf) -> 4 x 4 x (16 x bf)
+        x = torch.cat((x, embedding), dim=1)
 
-            # 4 x 4 x (16 x bf) -> 1
-            return self.output(x)
+        # 4 x 4 x (16 x bf) -> 1
+        return self.output(x)

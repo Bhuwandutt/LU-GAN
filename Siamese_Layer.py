@@ -1,4 +1,4 @@
-from efficientnet_pytorch import EfficientNet
+# from efficientnet_pytorch import EfficientNet
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models

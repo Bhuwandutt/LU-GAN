@@ -1,9 +1,10 @@
 from typing import Optional
 import os
-from pytorch_lightning.utilities.types import EVAL_DATALOADERS
+# from pytorch_lightning.utilities.types import EVAL_DATALOADERS
+import torch
+
 from OpenAIDataset import OpenAIDataset, ViewConsistencyDataset
 from Decoder import Decoder, MultiscaleDecoder, PDecoder
-import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from Encoder import Encoder
 from Siamese_Layer import *
@@ -15,48 +16,52 @@ import json
 from tqdm import tqdm
 
 
-class OPENIDataModule(pl.LightningDataModule):
-
-    def __init__(self, batch_size: int = 12, shuffle: bool = False):
-        super(OPENIDataModule, self).__init__()
-
-        self.siamese_set = None  # DataSet for training View Consistency Network
-        self.dataset = None  # DataSet containing all the images and reports
-        self.val_set = None  # Validation Dataset Split ( For changing the split ratio, see pre-processiong.py)
-        self.train_set = None  # Training Dataset
-        self.test_set = None  # Testing Dataset
-        self.batch_size = batch_size
-
-    def setup(self, stage: Optional[str] = 'train'):
-        if stage == 'train':
-            self.train_set = OpenAIDataset(file_name='indiana_reports_train',
-                                           transform=None)  # Transform is set to none but Transformation happens in
-            # DataClass
-        if stage == 'validation':
-            self.val_set = OpenAIDataset(file_name='indiana_reports_val',
-                                         transform=None)
-
-        if stage == 'test':
-            self.test_set = OpenAIDataset(file_name='indiana_reports_test',
-                                          transform=None)
-        if stage == 'sia':
-            self.siamese_set = ViewConsistencyDataset(file_name='indiana_reports_cleaned')
-        else:
-            self.dataset = OpenAIDataset(file_name='indiana_reports_cleaned',
-                                         transform=None)
-
-    def train_dataloader(self):
-        return DataLoader(self.train_set)
-
-    def test_dataloader(self):
-        return DataLoader(self.test_set)
-
-    def val_dataloader(self) -> EVAL_DATALOADERS:
-        return DataLoader(self.val_set)
-
-    def full_dataloader(self):
-        return DataLoader(self.dataset)
-    
+# class OPENIDataModule(pl.LightningDataModule):
+#
+# PyTorch lightning (https://www.pytorchlightning.ai) module for more compact and clean coding for Dataset setup
+# and object creation.
+#
+#
+#     def __init__(self, batch_size: int = 12, shuffle: bool = False):
+#         super(OPENIDataModule, self).__init__()
+#
+#         self.siamese_set = None  # DataSet for training View Consistency Network
+#         self.dataset = None  # DataSet containing all the images and reports
+#         self.val_set = None  # Validation Dataset Split ( For changing the split ratio, see pre-processiong.py)
+#         self.train_set = None  # Training Dataset
+#         self.test_set = None  # Testing Dataset
+#         self.batch_size = batch_size
+#
+#     def setup(self, stage: Optional[str] = 'train'):
+#         if stage == 'train':
+#             self.train_set = OpenAIDataset(file_name='indiana_reports_train',
+#                                            transform=None)  # Transform is set to none but Transformation happens in
+#             # DataClass
+#         if stage == 'validation':
+#             self.val_set = OpenAIDataset(file_name='indiana_reports_val',
+#                                          transform=None)
+#
+#         if stage == 'test':
+#             self.test_set = OpenAIDataset(file_name='indiana_reports_test',
+#                                           transform=None)
+#         if stage == 'sia':
+#             self.siamese_set = ViewConsistencyDataset(file_name='indiana_reports_cleaned')
+#         else:
+#             self.dataset = OpenAIDataset(file_name='indiana_reports_cleaned',
+#                                          transform=None)
+#
+#     def train_dataloader(self):
+#         return DataLoader(self.train_set)
+#
+#     def test_dataloader(self):
+#         return DataLoader(self.test_set)
+#
+#     def val_dataloader(self) -> EVAL_DATALOADERS:
+#         return DataLoader(self.val_set)
+#
+#     def full_dataloader(self):
+#         return DataLoader(self.dataset)
+#
 
 class Trainer:
     train_set: OpenAIDataset
@@ -65,11 +70,11 @@ class Trainer:
         super(Trainer, self).__init__()
         self.siamese_set = None  # DataSet for training View Consistency Network
         self.S_DataLoader = None  # DataSet containing all the images and reports
-        self.val_set = None
+        self.val_set = None  # Dataset for Validation Set
         self.test_set = None
         self.DISP_FREQs = [10, 20, 30, 40]
         self.writer = SummaryWriter(os.path.join("runs"), 'Text-to-image XRayGAN OPENI256')
-
+        # Dataloader setup (for implementation, see function setup()
         self.train_dataloader = self.setup('train')
         self.sia_dataloader = self.setup('sia')
         # Set up the DataModule for training by explicit
@@ -87,18 +92,19 @@ class Trainer:
         self.embednet = None
         self.decoder_F = None
         self.decoder_L = None
-        self.encoder = None
-        self.image_size = [256, 256]
+        self.encoder = None  # Change to LinkBERT
+
+        self.image_size = [256, 256]  # The resolution of generated image
         self.device = torch.device('mps')
-        self.G_LR = [0.0003, 0.0003, 0.0002, 0.0001]
-        self.D_LR = [0.0003, 0.0003, 0.0002, 0.0001]
+        self.G_LR = [0.0003, 0.0003, 0.0002, 0.0001]    # Generator learning rates
+        self.D_LR = [0.0003, 0.0003, 0.0002, 0.0001]    # Decoder leaning rate
         self.LR_DECAY_EPOCH = [[45], [45, 70], [45, 70, 90], [45, 70, 90]]
-        self.S_LR = 0.01
+        self.S_LR = 0.01  # Siamese Learning Rate, a.k.a. the Discriminator Layer
         self.MAX_EPOCH = [50, 50, 90, 90]
         self.SIAMESE_EPOCH = [8, 10, 10, 12]
 
         # Loss Function
-        self.G_criterion = nn.MSELoss().to(self.device)
+        self.G_criterion = nn.MSELoss().to(self.device)  # Mean Square Error Loss
         self.S_criterion = nn.BCELoss().to(self.device)
 
         self.base_size = 32
@@ -135,6 +141,7 @@ class Trainer:
             self.S_DataLoader = OpenAIDataset(file_name='indiana_reports_cleaned')
 
     def define_nets(self):
+        # Comment the encoder out
         self.encoder = Encoder(vocab_size=self.train_set.vocab_size,
                                embedding_size=128,
                                hidden_size=128,
@@ -310,7 +317,7 @@ class Trainer:
         # Get local time for checkpoint saving
         return (str(datetime.datetime.now())[:-10]).replace(' ', '-').replace(':', '-')
 
-    def cal_gradient_penalty(netD, real_data, fake_data, txt_emded, device='mps', type='mixed', constant=1.0,
+    def cal_gradient_penalty(self,netD, real_data, fake_data, txt_emded, type='mixed', constant=1.0,
                              lambda_gp=10.0):
         """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
         Arguments:
@@ -330,8 +337,7 @@ class Trainer:
             elif type == 'fake':
                 interpolatesv = fake_data
             elif type == 'mixed':
-
-                alpha = torch.rand(real_data.shape[0], 1, device=device)
+                alpha = torch.rand(real_data.shape[0], 1, device='mps')
                 alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(
                     *real_data.shape)
                 interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
@@ -341,12 +347,19 @@ class Trainer:
                 raise NotImplementedError('{} not implemented'.format(type))
 
             disc_interpolates = netD(interpolatesv, txt_emded)
+
+            # grad() Computes and returns the sum of gradients of outputs with respect to the inputs.
             gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
-                                            grad_outputs=torch.ones(disc_interpolates.size()).to(device),
+                                            grad_outputs=torch.ones(disc_interpolates.size(),
+                                                                    dtype=torch.float).to('mps'),
                                             create_graph=True, retain_graph=True, only_inputs=True)
-            gradients = gradients[0].view(real_data.size(0), -1)  # flat the data
-            gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp  # added eps
-            return gradient_penalty, gradients
+
+            # print("Gradient 1", (gradients))
+            gradients = gradients[0].view(real_data.size(0), -1)  # flatten the data
+            gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp
+            #print("Gradient 1", gradients.size())
+            # added eps
+            return gradient_penalty, gradients[0]
         else:
             return 0.0, None
 
@@ -359,7 +372,8 @@ class Trainer:
 
         global D_loss, G_loss
         image = F.interpolate(image, size=(2 ** layer_id) * self.base_size)
-        txt_emded, hidden = self.encoder(finding, impression)
+        txt_emded, hidden = self.encoder(finding, impression)  # Change the Encoder as LinkBERT
+
         pre_image = decoder(txt_emded, layer_id)
 
         # Train Discriminator
@@ -367,11 +381,25 @@ class Trainer:
             self.D_optimizer.zero_grad()
             pre_fake = D(pre_image, txt_emded)
             pre_real = D(image, txt_emded)
-            gradient_penalty, gradients = self.cal_gradient_penalty(D, image, pre_image, txt_emded, "mps",
-                                                                    lambda_gp=10.0)
+            gradient_penalty, gradients = self.cal_gradient_penalty(netD=D,
+                                                                    real_data=image,
+                                                                    fake_data=pre_image,
+                                                                    txt_emded=txt_emded
+                                                                    )
+            # netD, real_data, fake_data, txt_emded, type='mixed', constant=1.0,
+            #                              lambda_gp=10.0):
 
             D_loss = pre_fake.mean() - pre_real.mean() + gradient_penalty
-            D_loss.backward(retain_graph=True)
+            D_loss.to('mps')
+
+            print(f'Gradient Penalty Size:- {gradient_penalty.size()}')
+
+            # print(f'Gradient Size: {gradients.size()}')
+            # D_loss=D_loss.to('mps')
+            torch.autograd.set_detect_anomaly(True)
+            print(f'D_Loss:{D_loss.size()}')
+
+            D_loss.backward()
 
             self.D_optimizer.step()
 
@@ -398,7 +426,7 @@ class Trainer:
         DISP_FREQ = self.DISP_FREQs[layer_id]
         for epoch in range(10):
             print('Generator Epoch [{}/20]'.format(epoch))
-            self.encoder.train()
+            self.encoder.train()  # Train the encoder layer , comment this out
             self.decoder_F.train()
             self.decoder_L.train()
             for idx, batch in tqdm(enumerate(self.train_dataloader)):
@@ -408,11 +436,11 @@ class Trainer:
                 impression = batch['impression'].to(self.device)
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
-
-                print(f"Finding Shape = {finding.size()}")
-                print(f'Impression shape = {impression.size()}')
-                print(f'Image Frontal shape = {image_f.size()}')
-                print(f'Image Lateral shape ={ image_l.size()}')
+                #
+                # print(f"Finding Shape = {finding.size()}")
+                # print(f'Impression shape = {impression.size()}')
+                # print(f'Image Frontal shape = {image_f.size()}')
+                # print(f'Image Lateral shape ={ image_l.size()}')
 
                 loss_f, pre_image_f, r_image_f = self.Loss_on_layer(image_f, finding, impression, layer_id,
                                                                     self.decoder_F)
@@ -445,14 +473,13 @@ class Trainer:
 
     def train_GAN_layer(self, layer_id):
         DISP_FREQ = self.DISP_FREQs[layer_id]
-        self.encoder.train()
+        self.encoder.train() # Comment the file
         self.decoder_F.train()
         self.decoder_L.train()
         self.D_F.train()
         self.D_L.train()
         for epoch in range(self.MAX_EPOCH[layer_id]):
             print('GAN Epoch [{}/{}]'.format(epoch, self.MAX_EPOCH[layer_id]))
-
             for idx, batch in enumerate(self.train_dataloader):
                 finding = batch['finding'].to(self.device)
                 impression = batch['impression'].to(self.device)
@@ -542,7 +569,7 @@ class Trainer:
 
             if layer_id == 0:
                 print("Start training on Decoder {}".format(layer_id))
-                self.train_layer(layer_id)
+                # self.train_layer(layer_id)
 
             # Train GAN by layer
 

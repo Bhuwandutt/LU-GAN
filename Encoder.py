@@ -49,6 +49,8 @@ class Encoder(nn.Module):
                                           dropout=dropout,
                                           batch_first=self.batch_first)
         # Sentence-Level LSTM
+        # self.embedding = LinkBERT(sentence to create embedding)
+
         self.sentence_RNN2 = AttentionSentRNN(sent_gru_hidden=self.hidden_size,
                                               word_gru_hidden=self.hidden_size,
                                               feature_base_dim=self.feature_base_dim,
@@ -68,6 +70,8 @@ class Encoder(nn.Module):
 
         outputs = torch.cat((outputs1, outputs2), 1)
 
+        print(f"Output Size :- {outputs.size()}")
+
         outputs = self.fc(outputs)
         return outputs, hidden
 
@@ -79,6 +83,7 @@ class Encoder(nn.Module):
         word_embed, state_word, _ = self.word_RNN1(x)
         all_word_embed = word_embed.view(batch, sent_len, -1)
         sent_embed, state_sent, _ = self.sentence_RNN1(all_word_embed)
+        print(f"Sent Embed (forward 1)Size:- {sent_embed.size()}")
 
         return sent_embed
 
@@ -88,4 +93,5 @@ class Encoder(nn.Module):
         word_embed, state_word, _ = self.word_RNN2(x)
         all_word_embed = word_embed.view(batch, sent_len, -1)
         sent_embed, state_sent, _ = self.sentence_RNN2(all_word_embed)
+        print(f"Sent Embed Size:- {sent_embed.size()}")
         return sent_embed
