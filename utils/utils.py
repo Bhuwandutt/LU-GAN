@@ -4,8 +4,8 @@ import cv2
 import os
 from PIL import Image
 
-CSV_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/csv/'
-IMAGE_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/data/imgs/'
+CSV_DIR = os.getcwd()+'/LU-GAN/csv/'
+IMAGE_DIR = os.getcwd()+'/LU-GAN/data/imgs/'
 
 
 class Equalize(object):
@@ -30,6 +30,7 @@ class ToTensor(object):
         # print("To Tensor")
         # torch image: channel * H * W
         h, w = image.shape[:2]
+        # print(f'{image}')
         image = image.reshape((1, h, w))/255
         image = (image - 0.5) / 0.5
         return image

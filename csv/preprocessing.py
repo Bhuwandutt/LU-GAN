@@ -6,8 +6,9 @@ import seaborn as sns
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import math
+import os
 
-CSV_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/csv/'
+CSV_DIR = os.getcwd()+'/csv/'
 
 dataframe = pd.read_csv(CSV_DIR + "/" + 'indiana_reports.csv')
 dataframe = dataframe.drop(columns=['MeSH', 'image', 'Problems', 'comparison'], axis=1)
@@ -141,11 +142,12 @@ for index, row in df_projection.iterrows():
 dataframe = dataframe[dataframe['uid'].isin(uid_list)]
 
 df = dataframe.sample(frac=1).reset_index(drop=True)
+df=dataframe
 df.to_csv(path_or_buf=CSV_DIR + '/indiana_reports_cleaned.csv', index=False)
 n_rows = df.shape[0]
-df_train = df.iloc[0: math.floor(n_rows * 0.03), :]
-df_val = df.iloc[math.floor(n_rows * 0.03):math.floor(n_rows * 0.05), :]
-df_test = df.iloc[math.floor(n_rows * 0.05):math.floor(n_rows * 0.06), :]
+df_train = df.iloc[0: math.floor(n_rows * 0.3), :]
+df_val = df.iloc[math.floor(n_rows * 0.3):math.floor(n_rows * 0.35), :]
+df_test = df.iloc[math.floor(n_rows * 0.35):math.floor(n_rows * 0.45), :]
 print(dataframe.shape)
 
 df_train.to_csv(path_or_buf=CSV_DIR + '/indiana_reports_train.csv', index=False)

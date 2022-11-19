@@ -5,13 +5,16 @@ import json
 import torchvision.transforms as transforms
 import random
 from utils.utils import *
+import os
+import numpy as np
+import pandas as pd
 
 
 PATH_DATASETS = os.environ.get("PATH_DATASETS", ".")
 BATCH_SIZE = 32
 NUM_WORKERS = 1
-CSV_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/csv/'
-IMAGE_DIR = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/data/imgs/'
+CSV_DIR = os.getcwd()+'/csv/'
+IMAGE_DIR = os.getcwd()+'/data/imgs/'
 
 
 class OpenAIDataset(Dataset):
@@ -35,7 +38,7 @@ class OpenAIDataset(Dataset):
         self.image_L = []
         self.image_F = []
         self.subject_ids = []
-        self.word_dict = '/Users/bhuwandutt/Documents/GitHub/LU-GAN/utils/dict.json'
+        self.word_dict = os.getcwd()+'/utils/dict.json'
         if os.path.exists(self.word_dict):
             with open(self.word_dict) as f:
                 self.word_to_idx, self.vocab_size, self.max_len_impression, self.max_len_finding, \
