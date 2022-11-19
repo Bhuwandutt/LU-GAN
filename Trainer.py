@@ -87,20 +87,20 @@ class Trainer:
         self.D_L = None
         self.D_F = None
         self.D_checkpoint = None
-        self.decoder_checkpoint = None
-        self.encoder_checkpoint = None
+        self.decoder_checkpoint = os.getcwd()+'/checkpoint/'
+        self.encoder_checkpoint = os.getcwd()+'/checkpoint/'
         self.embednet = None
         self.decoder_F = None
         self.decoder_L = None
         self.encoder = None  # Change to LinkBERT
 
         self.image_size = [256, 256]  # The resolution of generated image
-        self.device = torch.device('mps')
+        self.device = torch.device('cuda')
         self.G_LR = [0.0003, 0.0003, 0.0002, 0.0001]    # Generator learning rates
         self.D_LR = [0.0003, 0.0003, 0.0002, 0.0001]    # Decoder leaning rate
         self.LR_DECAY_EPOCH = [[45], [45, 70], [45, 70, 90], [45, 70, 90]]
         self.S_LR = 0.01  # Siamese Learning Rate, a.k.a. the Discriminator Layer
-        self.MAX_EPOCH = [50, 50, 90, 90]
+        self.MAX_EPOCH = [20, 20, 20, 20]
         self.SIAMESE_EPOCH = [8, 10, 10, 12]
 
         # Loss Function
@@ -143,9 +143,9 @@ class Trainer:
     def define_nets(self):
         # Comment the encoder out
         self.encoder = Encoder(vocab_size=self.train_set.vocab_size,
-                               embedding_size=128,
-                               hidden_size=128,
-                               feature_base_dim=512).to(self.device)
+                              embedding_size=128,
+                              hidden_size=128,max_len = 256, feature_base_dim=512).to(self.device)
+
         decoders_F = []
         decoders_L = []
         first_decoder = Decoder(input_dim=512,
@@ -337,7 +337,7 @@ class Trainer:
             elif type == 'fake':
                 interpolatesv = fake_data
             elif type == 'mixed':
-                alpha = torch.rand(real_data.shape[0], 1, device='mps')
+                alpha = torch.rand(real_data.shape[0], 1, device='cuda')
                 alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(
                     *real_data.shape)
                 interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
@@ -351,7 +351,7 @@ class Trainer:
             # grad() Computes and returns the sum of gradients of outputs with respect to the inputs.
             gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
                                             grad_outputs=torch.ones(disc_interpolates.size(),
-                                                                    dtype=torch.float).to('mps'),
+                                                                    dtype=torch.float).to(device=self.device),
                                             create_graph=True, retain_graph=True, only_inputs=True)
 
             # print("Gradient 1", (gradients))
@@ -378,48 +378,40 @@ class Trainer:
 
         # Train Discriminator
         for _ in range(1):
-            self.D_optimizer.zero_grad()
-            pre_fake = D(pre_image, txt_emded)
-            pre_real = D(image, txt_emded)
+            
             gradient_penalty, gradients = self.cal_gradient_penalty(netD=D,
                                                                     real_data=image,
                                                                     fake_data=pre_image,
                                                                     txt_emded=txt_emded
                                                                     )
+            self.D_optimizer.zero_grad()
+            self.G_optimizer.zero_grad()
+
+            pre_fake = D(pre_image, txt_emded)
+            pre_real = D(image, txt_emded)
+            
             # netD, real_data, fake_data, txt_emded, type='mixed', constant=1.0,
             #                              lambda_gp=10.0):
-
+            adv_loss = -1 * pre_fake.mean()
             D_loss = pre_fake.mean() - pre_real.mean() + gradient_penalty
-            D_loss.to('mps')
+            content_loss = 100 * self.G_criterion(pre_image.float(),
+                                                  image.float())
+            
 
-            print(f'Gradient Penalty Size:- {gradient_penalty.size()}')
+            #print(f'Gradient Penalty Size:- {gradient_penalty.size()}')
 
             # print(f'Gradient Size: {gradients.size()}')
             # D_loss=D_loss.to('mps')
             torch.autograd.set_detect_anomaly(True)
-            print(f'D_Loss:{D_loss.size()}')
+            # print(f'D_Loss:{D_loss.size()}')
 
-            D_loss.backward()
-
-            self.D_optimizer.step()
-
-        # Train Generator
-        for _ in range(1):
-            self.G_optimizer.zero_grad()
-
-            pre_fake = D(pre_image, txt_emded)
-
-            adv_loss = -1 * pre_fake.mean()
+            D_loss.backward(retain_graph=True)
             adv_loss.backward(retain_graph=True)
-
-            content_loss = 100 * self.G_criterion(pre_image.float(),
-                                                  image.float())
             content_loss.backward(retain_graph=True)
-
             G_loss = content_loss + adv_loss
 
+            self.D_optimizer.step()
             self.G_optimizer.step()
-
         return D_loss, G_loss, pre_image, image
 
     def train_layer(self, layer_id):
@@ -491,12 +483,12 @@ class Trainer:
                 D_loss_l, G_loss_l, pre_image_l, image_l = self.Loss_on_layer_GAN(image_l, finding, impression,
                                                                                   layer_id, self.decoder_L, self.D_L)
 
-                # train with view consistency loss
-                self.G_optimizer.zero_grad()
-                pred = self.embednet(pre_image_f, pre_image_l)
-                id_loss = 1 * self.S_criterion(pred, torch.zeros_like(pred).to(self.device))
-                id_loss.backward()
-                self.G_optimizer.step()
+                # # train with view consistency loss
+                # self.G_optimizer.zero_grad()
+                # pred = self.embednet(pre_image_f, pre_image_l)
+                # id_loss = 1 * self.S_criterion(pred, torch.zeros_like(pred).to(self.device))
+                # id_loss.backward(retain_graph='True')
+                # self.G_optimizer.step()
 
                 if ((idx + 1) % DISP_FREQ == 0) and idx != 0:
                     # ...log the running loss
@@ -532,23 +524,22 @@ class Trainer:
             self.D_lr_scheduler.step(epoch)
             if (epoch + 1) % 20 == 0 and epoch != 0:
                 torch.save(self.encoder.state_dict(), os.path.join(self.encoder_checkpoint,
-                                                                   "Encoder_{}_Layer_{}_Time_{}_checkpoint.pth".format(
-                                                                       Encoder, layer_id,
-                                                                       self.get_time())))
+                                                                   "Encoder_{}_Layer_{}_checkpoint.pth".format(
+                                                                       Encoder, layer_id)))
                 torch.save(self.D_F.state_dict(), os.path.join(self.D_checkpoint,
-                                                               "D_{}_F_Layer_{}_Time_{}_checkpoint.pth".format(
-                                                                   Discriminator, layer_id, self.get_time())))
+                                                               "D_{}_F_Layer_{}_checkpoint.pth".format(
+                                                                   Discriminator, layer_id)))
                 torch.save(self.D_L.state_dict(), os.path.join(self.D_checkpoint,
-                                                               "D_{}_L_Layer_{}_Time_{}_checkpoint.pth".format(
-                                                                   Discriminator, layer_id, self.get_time())))
+                                                               "D_{}_L_Layer_{}_checkpoint.pth".format(
+                                                                   Discriminator, layer_id)))
 
                 torch.save(self.decoder_F.state_dict(), os.path.join(self.decoder_checkpoint,
-                                                                     "Decoder_{}_F_Layer_{}_Time_{}_checkpoint.pth".format(
-                                                                         Decoder, layer_id, self.get_time())))
+                                                                     "Decoder_{}_F_Layer_{}_checkpoint.pth".format(
+                                                                         Decoder, layer_id)))
 
                 torch.save(self.decoder_L.state_dict(), os.path.join(self.decoder_checkpoint,
-                                                                     "Decoder_{}_L_Layer_{}_Time_{}_checkpoint.pth".format(
-                                                                         Decoder, layer_id, self.get_time())))
+                                                                     "Decoder_{}_L_Layer_{}_checkpoint.pth".format(
+                                                                         Decoder, layer_id)))
 
     def train(self):
 
@@ -562,14 +553,14 @@ class Trainer:
 
             # Train VCN by layer
 
-            print(f"Start training on Siamese {layer_id}")
+            #print(f"Start training on Siamese {layer_id}")
 
             # self.train_Siamese_layer(layer_id)
             # Train Generator by layer
 
             if layer_id == 0:
                 print("Start training on Decoder {}".format(layer_id))
-                # self.train_layer(layer_id)
+                self.train_layer(layer_id)
 
             # Train GAN by layer
 
