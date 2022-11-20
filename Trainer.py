@@ -142,9 +142,7 @@ class Trainer:
 
     def define_nets(self):
         # Comment the encoder out
-        self.encoder = Encoder(vocab_size=self.train_set.vocab_size,
-                              embedding_size=128,
-                              hidden_size=128,max_len = 256, feature_base_dim=512).to(self.device)
+        self.encoder = Encoder(feature_base_dim=521).to(self.device)
 
         decoders_F = []
         decoders_L = []
@@ -396,11 +394,6 @@ class Trainer:
             D_loss = pre_fake.mean() - pre_real.mean() + gradient_penalty
             content_loss = 100 * self.G_criterion(pre_image.float(),
                                                   image.float())
-            
-
-            #print(f'Gradient Penalty Size:- {gradient_penalty.size()}')
-
-            # print(f'Gradient Size: {gradients.size()}')
             # D_loss=D_loss.to('mps')
             torch.autograd.set_detect_anomaly(True)
             # print(f'D_Loss:{D_loss.size()}')

@@ -8,7 +8,7 @@ from utils.utils import *
 import os
 import numpy as np
 import pandas as pd
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer
 
 PATH_DATASETS = os.environ.get("PATH_DATASETS", ".")
 BATCH_SIZE = 32
@@ -39,7 +39,7 @@ class OpenAIDataset(Dataset):
         # The sentence would be tokenized using pretrained Tokenizer to create a dictionary which maps the id's
         # to the text and attention mask
         self.tokenizer = AutoTokenizer.from_pretrained('michiyasunaga/BioLinkBERT-base')
-        self.model = AutoModel.from_pretrained('michiyasunaga/BioLinkBERT-base').to(device=self.device)
+        #
 
         self.findings = []
         self.impression = []
@@ -87,14 +87,19 @@ class OpenAIDataset(Dataset):
         chest_img_L = self.transform(chest_img_L)
 
         tokenized_finding = self.tokenizer(self.findings[idx],
+                                           padding='max_length',
                                            max_len=self.max_len_finding,
                                            return_tensors="pt")
         tokenized_impression = self.tokenizer(self.impression[idx],
+                                              padding='max_length',
                                               max_len=self.max_len_impression,
                                               return_tensors="pt")
 
-        input_ids = tokenized_finding.input_ids.to(device=self.device)
-        attention_mask = tokenized_finding.attention_mask.to(device=self.device)
+        dict_finding = {'input_ids': tokenized_finding.input_ids.to(device=self.device),
+                        'attention_mask':  tokenized_finding.attention_mask.to(device=self.device)}
+
+        dict_impression = {'input_ids': tokenized_impression.input_ids.to(device=self.device),
+                           'attention_mask': tokenized_impression.attention_mask.to(device=self.device)}
 
         # print(self.findings[idx].shape)
 
@@ -102,8 +107,8 @@ class OpenAIDataset(Dataset):
 
         sample = {
             'subject_id': torch.tensor(self.subject_ids[idx], dtype=torch.long),
-            'finding': torch.tensor(self.findings[idx], dtype=torch.long),
-            'impression': torch.tensor(self.impression[idx], dtype=torch.long),
+            'finding': torch.tensor(dict_finding, dtype=torch.long),
+            'impression': torch.tensor(dict_impression, dtype=torch.long),
             'image_F': torch.tensor(chest_img_F, dtype=torch.float),
             'image_L': torch.tensor(chest_img_L, dtype=torch.float)
         }
