@@ -2,7 +2,7 @@ import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch import nn
 # from Attention import AttentionWordRNN, AttentionSentRNN
-from transformers import AutoTokenizer, AutoModel
+
 
 
 
@@ -29,45 +29,10 @@ class Encoder(nn.Module):
         self.batch_first = True
 
         self.sentence_bert = None 
-        self.tokenizer = AutoTokenizer.from_pretrained('michiyasunaga/BioLinkBERT-base')
-        self.model = AutoModel.from_pretrained('michiyasunaga/BioLinkBERT-base')
+
 
         self.sentence_bert = self.model
 
-
-        
-
-        # self.word_RNN1 = AttentionWordRNN(num_tokens=self.vocab_size,
-        #                                   embed_size=self.embed_size,
-        #                                   word_gru_hidden=self.hidden_size,
-        #                                   bidirectional=True,
-        #                                   dropout=dropout,
-        #                                   batch_first=self.batch_first)
-        # # Sentence-Level LSTM
-        # self.sentence_RNN1 = AttentionSentRNN(sent_gru_hidden=self.hidden_size,
-        #                                       word_gru_hidden=self.hidden_size,
-        #                                       feature_base_dim=self.feature_base_dim,
-        #                                       bidirectional=bi_direction,
-        #                                       dropout=dropout,
-        #                                       batch_first=self.batch_first)
-        # # Word-Level LSTM
-        # self.word_RNN2 = AttentionWordRNN(num_tokens=self.vocab_size,
-        #                                   embed_size=self.embed_size,
-        #                                   word_gru_hidden=self.hidden_size,
-        #                                   bidirectional=bi_direction,
-        #                                   dropout=dropout,
-        #                                   batch_first=self.batch_first)
-        # # Sentence-Level LSTM
-        # # self.embedding = LinkBERT(sentence to create embedding)
-
-        # self.sentence_RNN2 = AttentionSentRNN(sent_gru_hidden=self.hidden_size,
-        #                                       word_gru_hidden=self.hidden_size,
-        #                                       feature_base_dim=self.feature_base_dim,
-        #                                       bidirectional=bi_direction,
-        #                                       dropout=dropout,
-        #                                       batch_first=self.batch_first)
-
-        # # -> ngf x 1 x 1
         self.fc = nn.Sequential(
             nn.Linear(2 * self.hidden_size * self.num_dir, self.feature_base_dim, bias=False),
             nn.LeakyReLU(0.2, True)

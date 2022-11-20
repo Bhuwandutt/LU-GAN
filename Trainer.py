@@ -95,7 +95,7 @@ class Trainer:
         self.encoder = None  # Change to LinkBERT
 
         self.image_size = [256, 256]  # The resolution of generated image
-        self.device = torch.device('cuda')
+        self.device = torch.device('cpu')
         self.G_LR = [0.0003, 0.0003, 0.0002, 0.0001]    # Generator learning rates
         self.D_LR = [0.0003, 0.0003, 0.0002, 0.0001]    # Decoder leaning rate
         self.LR_DECAY_EPOCH = [[45], [45, 70], [45, 70, 90], [45, 70, 90]]
