@@ -33,7 +33,7 @@ class OpenAIDataset(Dataset):
         self.data_dir = PATH_DATASETS
         self.num_workers = NUM_WORKERS
         self.transform = transform
-        self.device = 'mps'
+        self.device = 'cuda'
 
         # Tokenizer for BioLinkBERT
         # The sentence would be tokenized using pretrained Tokenizer to create a dictionary which maps the id's
@@ -88,18 +88,18 @@ class OpenAIDataset(Dataset):
 
         tokenized_finding = self.tokenizer(self.findings[idx],
                                            padding='max_length',
-                                           max_len=self.max_len_finding,
+                                           max_length=self.max_len_finding,
                                            return_tensors="pt")
         tokenized_impression = self.tokenizer(self.impression[idx],
                                               padding='max_length',
-                                              max_len=self.max_len_impression,
+                                              max_length=self.max_len_impression,
                                               return_tensors="pt")
 
-        dict_finding = {'input_ids': tokenized_finding.input_ids.to(device=self.device),
-                        'attention_mask':  tokenized_finding.attention_mask.to(device=self.device)}
+        dict_finding = {'input_ids': tokenized_finding.input_ids.flatten().to(device=self.device),
+                        'attention_mask':  tokenized_finding.attention_mask.flatten().to(device=self.device)}
 
-        dict_impression = {'input_ids': tokenized_impression.input_ids.to(device=self.device),
-                           'attention_mask': tokenized_impression.attention_mask.to(device=self.device)}
+        dict_impression = {'input_ids': tokenized_impression.input_ids.flatten().to(device=self.device),
+                           'attention_mask': tokenized_impression.attention_mask.flatten().to(device=self.device)}
 
         # print(self.findings[idx].shape)
 
@@ -107,8 +107,10 @@ class OpenAIDataset(Dataset):
 
         sample = {
             'subject_id': torch.tensor(self.subject_ids[idx], dtype=torch.long),
-            'finding': torch.tensor(dict_finding, dtype=torch.long),
-            'impression': torch.tensor(dict_impression, dtype=torch.long),
+            'finding_input_ids': torch.tensor(dict_finding['input_ids'].detach(), dtype=torch.long),
+            'impression_input_ids': torch.tensor(dict_impression['input_ids'].detach(), dtype=torch.long),
+            'finding_attn': torch.tensor(dict_finding['attention_mask'].detach(), dtype=torch.long),
+            'impression_attn': torch.tensor(dict_impression['attention_mask'].detach(), dtype=torch.long),
             'image_F': torch.tensor(chest_img_F, dtype=torch.float),
             'image_L': torch.tensor(chest_img_L, dtype=torch.float)
         }
