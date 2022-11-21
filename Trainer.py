@@ -14,8 +14,9 @@ from torch.utils.tensorboard import SummaryWriter
 import datetime
 import json
 from tqdm import tqdm
+from tensorboardcolab import TensorBoardColab
 
-
+global tb = TensorBoardColab()
 # class OPENIDataModule(pl.LightningDataModule):
 #
 # PyTorch lightning (https://www.pytorchlightning.ai) module for more compact and clean coding for Dataset setup
@@ -95,12 +96,12 @@ class Trainer:
         self.encoder = None  # Change to LinkBERT
 
         self.image_size = [256, 256]  # The resolution of generated image
-        self.device = torch.device('cpu')
+        self.device = torch.device('cuda')
         self.G_LR = [0.0003, 0.0003, 0.0002, 0.0001]    # Generator learning rates
         self.D_LR = [0.0003, 0.0003, 0.0002, 0.0001]    # Decoder leaning rate
         self.LR_DECAY_EPOCH = [[45], [45, 70], [45, 70, 90], [45, 70, 90]]
         self.S_LR = 0.01  # Siamese Learning Rate, a.k.a. the Discriminator Layer
-        self.MAX_EPOCH = [20, 20, 20, 20]
+        self.MAX_EPOCH = [1, 1, 1, 1]
         self.SIAMESE_EPOCH = [8, 10, 10, 12]
 
         # Loss Function
@@ -142,7 +143,7 @@ class Trainer:
 
     def define_nets(self):
         # Comment the encoder out
-        self.encoder = Encoder(feature_base_dim=521).to(self.device)
+        self.encoder = Encoder(feature_base_dim=512).to(self.device)
 
         decoders_F = []
         decoders_L = []
@@ -235,9 +236,9 @@ class Trainer:
         for param_group in optimizer.param_groups:
             return param_group['lr']
 
-    def Loss_on_layer(self, image, finding, impression, layer_id, decoder):
+    def Loss_on_layer(self, image, finding_input_ids, impression_input_ids,finding_attention_mask,impression_attention_mask, layer_id, decoder):
 
-        txt_emded, hidden = self.encoder(finding, impression)
+        txt_emded = self.encoder(finding_input_ids, impression_input_ids,finding_attention_mask,impression_attention_mask)
         # print("Input Image", image.shape)
         r_image = F.interpolate(image, size=(2 ** layer_id) * 32)
         # print("r_image", r_image.size())
@@ -361,7 +362,7 @@ class Trainer:
         else:
             return 0.0, None
 
-    def Loss_on_layer_GAN(self, image, finding, impression, layer_id, decoder, D):
+    def Loss_on_layer_GAN(self, image, finding_input_ids, impression_input_ids, finding_attention_mask,impression_attention_mask, layer_id, decoder, D):
         # '''
         # Pretrain genertaor with batch
         # :image image batch
@@ -370,7 +371,7 @@ class Trainer:
 
         global D_loss, G_loss
         image = F.interpolate(image, size=(2 ** layer_id) * self.base_size)
-        txt_emded, hidden = self.encoder(finding, impression)  # Change the Encoder as LinkBERT
+        txt_emded = self.encoder(finding_input_ids,impression_input_ids,finding_attention_mask, impression_attention_mask)  # Change the Encoder as LinkBERT
 
         pre_image = decoder(txt_emded, layer_id)
 
@@ -409,27 +410,31 @@ class Trainer:
 
     def train_layer(self, layer_id):
         DISP_FREQ = self.DISP_FREQs[layer_id]
-        for epoch in range(10):
-            print('Generator Epoch [{}/20]'.format(epoch))
+        for epoch in range(1):
+            print('Generator Epoch [{}/1]'.format(epoch+1))
             self.encoder.train()  # Train the encoder layer , comment this out
             self.decoder_F.train()
             self.decoder_L.train()
             for idx, batch in tqdm(enumerate(self.train_dataloader)):
                 # print("Train")
 
-                finding = batch['finding'].to(self.device)
-                impression = batch['impression'].to(self.device)
+                finding_input_ids = batch['finding_input_ids'].to(self.device)
+                impression_input_ids = batch['impression_input_ids'].to(self.device)
+                finding_attention_mask = batch['finding_attn'].to(self.device)
+                impression_attention_mask = batch['impression_attn'].to(self.device)
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
+                finding = {'input_ids':finding_input_ids, 'attention_mask': finding_attention_mask}
+                impression = {'input_ids':impression_input_ids, 'attention_mask': impression_attention_mask}
                 #
                 # print(f"Finding Shape = {finding.size()}")
                 # print(f'Impression shape = {impression.size()}')
                 # print(f'Image Frontal shape = {image_f.size()}')
                 # print(f'Image Lateral shape ={ image_l.size()}')
 
-                loss_f, pre_image_f, r_image_f = self.Loss_on_layer(image_f, finding, impression, layer_id,
+                loss_f,  pre_image_f, r_image_f = self.Loss_on_layer(image_f, finding_input_ids, impression_input_ids,finding_attention_mask,impression_attention_mask, layer_id,
                                                                     self.decoder_F)
-                loss_l, pre_image_l, r_image_l = self.Loss_on_layer(image_l, finding, impression, layer_id,
+                loss_l, pre_image_l, r_image_l = self.Loss_on_layer(image_l, finding_input_ids, impression_input_ids,finding_attention_mask,impression_attention_mask, layer_id,
                                                                     self.decoder_L)
 
                 if ((idx + 1) % DISP_FREQ == 0) and idx != 0:
@@ -466,14 +471,16 @@ class Trainer:
         for epoch in range(self.MAX_EPOCH[layer_id]):
             print('GAN Epoch [{}/{}]'.format(epoch, self.MAX_EPOCH[layer_id]))
             for idx, batch in enumerate(self.train_dataloader):
-                finding = batch['finding'].to(self.device)
-                impression = batch['impression'].to(self.device)
+                finding_input_ids = batch['finding_input_ids'].to(self.device)
+                impression_input_ids = batch['impression_input_ids'].to(self.device)
+                finding_attention_mask = batch['finding_attn'].to(self.device)
+                impression_attention_mask = batch['impression_attn'].to(self.device)
                 image_f = batch['image_F'].to(self.device)
                 image_l = batch['image_L'].to(self.device)
 
-                D_loss_f, G_loss_f, pre_image_f, image_f = self.Loss_on_layer_GAN(image_f, finding, impression,
-                                                                                  layer_id, self.decoder_F, self.D_F)
-                D_loss_l, G_loss_l, pre_image_l, image_l = self.Loss_on_layer_GAN(image_l, finding, impression,
+                D_loss_f, G_loss_f, pre_image_f, image_f = self.Loss_on_layer_GAN(image_f, finding_input_ids, impression_input_ids,finding_attention_mask,impression_attention_mask
+                                                                                  ,layer_id, self.decoder_F, self.D_F)
+                D_loss_l, G_loss_l, pre_image_l, image_l = self.Loss_on_layer_GAN(image_l, finding_input_ids, impression_input_ids,finding_attention_mask, impression_attention_mask, 
                                                                                   layer_id, self.decoder_L, self.D_L)
 
                 # # train with view consistency loss
@@ -513,9 +520,13 @@ class Trainer:
                     self.writer.add_images("GAN_Train_Predicted_lateral_{}".format(layer_id),
                                            (pre_image_l + 1) / 2,
                                            epoch * len(self.train_dataloader) + idx)
+            
+            
+            tb=self.writer
+            
             self.G_lr_scheduler.step(epoch)
             self.D_lr_scheduler.step(epoch)
-            if (epoch + 1) % 20 == 0 and epoch != 0:
+            if (epoch +1) % 1== 0 and epoch != 0:
                 torch.save(self.encoder.state_dict(), os.path.join(self.encoder_checkpoint,
                                                                    "Encoder_{}_Layer_{}_checkpoint.pth".format(
                                                                        Encoder, layer_id)))
